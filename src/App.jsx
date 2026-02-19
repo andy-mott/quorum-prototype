@@ -6,16 +6,128 @@ const LOCATIONS = [
 ];
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-function generateDates(count = 28) {
-  const dates = [];
+function getDaysInMonth(year, month) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function getFirstDayOfMonth(year, month) {
+  return new Date(year, month, 1).getDay();
+}
+
+function toDateKey(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function todayKey() {
+  const t = new Date();
+  return toDateKey(t.getFullYear(), t.getMonth(), t.getDate());
+}
+
+function isPast(year, month, day) {
   const today = new Date();
-  for (let i = 1; i <= count; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    dates.push(d);
-  }
-  return dates;
+  today.setHours(0, 0, 0, 0);
+  const d = new Date(year, month, day);
+  return d < today;
+}
+
+const ChevronLeft = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M10 4L6 8L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const ChevronRight = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+function CalendarWidget({ selectedDates, onToggleDate, accentColor }) {
+  const now = new Date();
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth());
+  const [showYearPicker, setShowYearPicker] = useState(false);
+
+  const daysInMonth = getDaysInMonth(viewYear, viewMonth);
+  const firstDay = getFirstDayOfMonth(viewYear, viewMonth);
+  const today = todayKey();
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(viewYear - 1); }
+    else setViewMonth(viewMonth - 1);
+  };
+
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); }
+    else setViewMonth(viewMonth + 1);
+  };
+
+  const canGoPrev = viewYear > now.getFullYear() || (viewYear === now.getFullYear() && viewMonth > now.getMonth());
+
+  const yearOptions = [];
+  for (let y = now.getFullYear(); y <= now.getFullYear() + 3; y++) yearOptions.push(y);
+
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div>
+      <div style={styles.calNavRow}>
+        <button onClick={prevMonth} style={{ ...styles.calNavBtn, ...(canGoPrev ? {} : { opacity: 0.3, cursor: "default" }) }} disabled={!canGoPrev}>
+          <ChevronLeft />
+        </button>
+        <button onClick={() => setShowYearPicker(!showYearPicker)} style={styles.calMonthLabel}>
+          {MONTH_NAMES[viewMonth]} {viewYear}
+          <ChevronDown />
+        </button>
+        <button onClick={nextMonth} style={styles.calNavBtn}>
+          <ChevronRight />
+        </button>
+      </div>
+      {showYearPicker && (
+        <div style={styles.yearPickerRow}>
+          {yearOptions.map((y) => (
+            <button key={y} onClick={() => { setViewYear(y); setShowYearPicker(false); }}
+              style={{ ...styles.yearChip, ...(viewYear === y ? styles.yearChipActive : {}) }}>
+              {y}
+            </button>
+          ))}
+        </div>
+      )}
+      <div style={styles.calDayHeaders}>
+        {DAYS_OF_WEEK.map((d) => <div key={d} style={styles.calDayHeader}>{d}</div>)}
+      </div>
+      <div style={styles.calGrid}>
+        {cells.map((day, i) => {
+          if (day === null) return <div key={`empty-${i}`} style={styles.calEmpty} />;
+          const key = toDateKey(viewYear, viewMonth, day);
+          const selected = selectedDates.includes(key);
+          const past = isPast(viewYear, viewMonth, day);
+          const isToday = key === today;
+          const isWeekend = (i % 7 === 0) || (i % 7 === 6);
+          return (
+            <button
+              key={key}
+              onClick={() => !past && onToggleDate(key)}
+              disabled={past}
+              style={{
+                ...styles.calCell,
+                ...(past ? styles.calCellPast : {}),
+                ...(isWeekend && !selected && !past ? styles.calCellWeekend : {}),
+                ...(isToday && !selected ? styles.calCellToday : {}),
+                ...(selected ? { ...styles.calCellSelected, background: accentColor, borderColor: accentColor } : {}),
+              }}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 const TIME_SLOTS = [
@@ -104,6 +216,22 @@ const UsersIcon = () => (
   </svg>
 );
 
+const LockIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M5 7V5C5 3.34 6.34 2 8 2C9.66 2 11 3.34 11 5V7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+    <circle cx="8" cy="10.5" r="1" fill="currentColor"/>
+  </svg>
+);
+
+const UnlockIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <rect x="3" y="7" width="10" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M5 7V5C5 3.34 6.34 2 8 2C9.66 2 11 3.34 11 5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+    <circle cx="8" cy="10.5" r="1" fill="currentColor"/>
+  </svg>
+);
+
 const SET_COLORS = [
   { bg: "#eaf4fb", border: "#2e86c1", accent: "#2e86c1", light: "#d4eaf8" },
   { bg: "#fef3e2", border: "#e67e22", accent: "#e67e22", light: "#fde8c8" },
@@ -112,9 +240,49 @@ const SET_COLORS = [
   { bg: "#fce4ec", border: "#c62828", accent: "#c62828", light: "#f8bbd0" },
 ];
 
-function AvailabilitySet({ set, index, colors, dates, onToggleDate, onChangeTime, onRemove, canRemove }) {
-  const formatDate = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const formatDayName = (d) => DAYS_OF_WEEK[d.getDay()];
+function formatDateList(dateKeys) {
+  if (dateKeys.length === 0) return "No dates selected";
+  const sorted = [...dateKeys].sort();
+  return sorted.map((k) => {
+    const [y, m, d] = k.split("-").map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }).join(", ");
+}
+
+function AvailabilitySet({ set, index, colors, onToggleDate, onChangeTime, onRemove, canRemove, collapsed, onExpand }) {
+  if (collapsed) {
+    return (
+      <div
+        style={{ ...styles.setCard, borderColor: colors.border, background: "#fff", cursor: "pointer" }}
+        onClick={onExpand}
+      >
+        <div style={{ ...styles.setHeader, background: colors.bg }}>
+          <div style={styles.setHeaderLeft}>
+            <div style={{ ...styles.setDot, background: colors.accent }} />
+            <span style={styles.setTitle}>Availability {index + 1}</span>
+            <span style={styles.setDateCount}>{set.dates.length} date{set.dates.length !== 1 ? "s" : ""}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {canRemove && (
+              <button onClick={(e) => { e.stopPropagation(); onRemove(); }} style={styles.setRemoveBtn}><TrashIcon /></button>
+            )}
+            <div style={{ color: "#9aa5b4", transform: "rotate(-90deg)", display: "flex" }}><ChevronDown /></div>
+          </div>
+        </div>
+        <div style={styles.collapsedBody}>
+          <div style={styles.collapsedRow}>
+            <CalendarIcon />
+            <span style={styles.collapsedText}>{formatDateList(set.dates)}</span>
+          </div>
+          <div style={styles.collapsedRow}>
+            <ClockIcon />
+            <span style={styles.collapsedText}>{set.timeStart} — {set.timeEnd}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ ...styles.setCard, borderColor: colors.border, background: "#fff" }}>
@@ -124,33 +292,19 @@ function AvailabilitySet({ set, index, colors, dates, onToggleDate, onChangeTime
           <span style={styles.setTitle}>Availability {index + 1}</span>
           <span style={styles.setDateCount}>{set.dates.length} date{set.dates.length !== 1 ? "s" : ""}</span>
         </div>
-        {canRemove && (
-          <button onClick={onRemove} style={styles.setRemoveBtn}><TrashIcon /></button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {canRemove && (
+            <button onClick={onRemove} style={styles.setRemoveBtn}><TrashIcon /></button>
+          )}
+        </div>
       </div>
       <div style={styles.setSection}>
         <label style={styles.setSectionLabel}>Select dates</label>
-        <div style={styles.calendarGrid}>
-          {dates.map((d) => {
-            const key = d.toISOString().split("T")[0];
-            const selected = set.dates.includes(key);
-            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-            return (
-              <button
-                key={key}
-                onClick={() => onToggleDate(key)}
-                style={{
-                  ...styles.dateCell,
-                  ...(selected ? { ...styles.dateCellSelected, borderColor: colors.accent, background: colors.accent } : {}),
-                  ...(isWeekend && !selected ? styles.dateCellWeekend : {}),
-                }}
-              >
-                <span style={styles.dateDayName}>{formatDayName(d)}</span>
-                <span style={styles.dateNumber}>{formatDate(d)}</span>
-              </button>
-            );
-          })}
-        </div>
+        <CalendarWidget
+          selectedDates={set.dates}
+          onToggleDate={onToggleDate}
+          accentColor={colors.accent}
+        />
       </div>
       <div style={styles.setSection}>
         <label style={styles.setSectionLabel}>Time window for these dates</label>
@@ -183,7 +337,7 @@ function AvailabilitySet({ set, index, colors, dates, onToggleDate, onChangeTime
 export default function QuorumSchedulingForm() {
   const [step, setStep] = useState(0);
   const [eventType, setEventType] = useState("single");
-  const [duration, setDuration] = useState(90);
+  const [duration, setDuration] = useState(null);
   const [selectedLocations, setSelectedLocations] = useState([]);
   const [format, setFormat] = useState("in-person");
   const [availSets, setAvailSets] = useState([createEmptySet()]);
@@ -195,8 +349,8 @@ export default function QuorumSchedulingForm() {
   const [capacity, setCapacity] = useState(20);
   const [overflow, setOverflow] = useState(false);
   const [published, setPublished] = useState(false);
-
-  const dates = generateDates(28);
+  const [expandedSet, setExpandedSet] = useState(0);
+  const [durationLocked, setDurationLocked] = useState(false);
 
   const toggleLocation = (id) => {
     setSelectedLocations((prev) => prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]);
@@ -212,27 +366,43 @@ export default function QuorumSchedulingForm() {
     setAvailSets((prev) => prev.map((s, i) => i === setIndex ? { ...s, [field]: value } : s));
   };
 
-  const addSet = () => { if (availSets.length < 5) setAvailSets((prev) => [...prev, createEmptySet()]); };
-  const removeSet = (setIndex) => { setAvailSets((prev) => prev.filter((_, i) => i !== setIndex)); };
+  const addSet = () => {
+    if (availSets.length < 5) {
+      setAvailSets((prev) => [...prev, createEmptySet()]);
+      setExpandedSet(availSets.length);
+    }
+  };
+  const removeSet = (setIndex) => {
+    setAvailSets((prev) => prev.filter((_, i) => i !== setIndex));
+    setExpandedSet((prev) => {
+      if (prev === setIndex) return Math.max(0, setIndex - 1);
+      if (prev > setIndex) return prev - 1;
+      return prev;
+    });
+  };
 
   const totalSelectedDates = availSets.reduce((sum, s) => sum + s.dates.length, 0);
 
+  const formatDurationLabel = (d) => {
+    if (d < 60) return `${d} min`;
+    return `${Math.floor(d / 60)}${d % 60 ? '.5' : ''} hr${d >= 120 ? 's' : ''}`;
+  };
+
   const steps = [
-    { label: "Duration", icon: <ClockIcon /> },
-    { label: "Location", icon: <MapPinIcon /> },
     { label: "Schedule", icon: <CalendarIcon /> },
+    { label: "Location", icon: <MapPinIcon /> },
     { label: "Capacity", icon: <UsersIcon /> },
   ];
 
   const canAdvance = () => {
-    if (step === 0) return duration > 0;
-    if (step === 1) return format === "virtual" || selectedLocations.length > 0;
-    if (step === 2) {
+    if (step === 0) {
+      if (!durationLocked) return false;
       if (eventType === "single") return totalSelectedDates > 0;
       if (eventType === "recurring") return cadence && cadenceDay;
       if (eventType === "limited") return seriesCount > 0;
     }
-    if (step === 3) return quorum > 0 && capacity >= quorum;
+    if (step === 1) return format === "virtual" || selectedLocations.length > 0;
+    if (step === 2) return quorum > 0 && capacity >= quorum;
     return false;
   };
 
@@ -311,18 +481,173 @@ export default function QuorumSchedulingForm() {
         <div style={styles.stepContent}>
           {step === 0 && (
             <div>
-              <h3 style={styles.stepTitle}>How long is your gathering?</h3>
-              <p style={styles.stepDesc}>This helps Quorum find time slots that fit.</p>
-              <div style={styles.durationGrid}>
-                {DURATIONS.map((d) => (
-                  <button key={d} onClick={() => setDuration(d)} style={{ ...styles.durationChip, ...(duration === d ? styles.durationChipActive : {}) }}>
-                    {d < 60 ? `${d} min` : `${d / 60}${d % 60 ? `.5` : ``} hr${d > 60 ? "s" : ""}`}
-                  </button>
-                ))}
+              {/* Duration section */}
+              <div style={{ ...styles.durationSection, ...(durationLocked ? styles.durationSectionLocked : {}) }}>
+                <div style={styles.durationSectionHeader}>
+                  <div>
+                    <h3 style={{ ...styles.stepTitle, margin: 0 }}>How long is your gathering?</h3>
+                    {!durationLocked && <p style={{ ...styles.stepDesc, marginBottom: 0 }}>Select a duration to unlock scheduling below.</p>}
+                  </div>
+                  {durationLocked && (
+                    <button
+                      onClick={() => setDurationLocked(false)}
+                      style={{ ...styles.lockBtn, ...styles.lockBtnLocked }}
+                      title="Unlock to change duration"
+                    >
+                      <LockIcon />
+                    </button>
+                  )}
+                </div>
+                {durationLocked ? (
+                  <div style={styles.durationLockedSummary}>
+                    <ClockIcon />
+                    <span style={styles.durationLockedText}>{formatDurationLabel(duration)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div style={styles.durationGrid}>
+                      {DURATIONS.map((d) => (
+                        <button key={d} onClick={() => { setDuration(d); setDurationLocked(true); }} style={{ ...styles.durationChip, ...(duration === d ? styles.durationChipActive : {}) }}>
+                          {formatDurationLabel(d)}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={styles.customDuration}>
+                      <label style={styles.fieldLabel}>Or enter custom minutes</label>
+                      <input type="number" value={duration || ""} onChange={(e) => setDuration(Math.max(15, parseInt(e.target.value) || 0))} style={styles.numberInput} min="15" step="15" placeholder="e.g. 75" />
+                      {duration > 0 && !durationLocked && (
+                        <button onClick={() => setDurationLocked(true)} style={styles.lockCustomBtn}>
+                          Set {formatDurationLabel(duration)}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
-              <div style={styles.customDuration}>
-                <label style={styles.fieldLabel}>Or enter custom minutes</label>
-                <input type="number" value={duration} onChange={(e) => setDuration(Math.max(15, parseInt(e.target.value) || 0))} style={styles.numberInput} min="15" step="15" />
+
+              {/* Schedule section — always visible, disabled when duration not locked */}
+              <div style={{ marginTop: 24, ...(durationLocked ? {} : styles.scheduleDisabled) }}>
+                <h3 style={styles.stepTitle}>When should this happen?</h3>
+                <p style={styles.stepDesc}>Choose an event type, then define your availability. Quorum will cross-reference with location availability.</p>
+                <div style={styles.eventTypeRow}>
+                  {[
+                    { key: "single", label: "Single Event", desc: "One-time gathering" },
+                    { key: "recurring", label: "Recurring Series", desc: "Regular cadence" },
+                    { key: "limited", label: "Limited Series", desc: "Set number of sessions" },
+                  ].map((t) => (
+                    <button key={t.key} onClick={() => durationLocked && setEventType(t.key)} style={{ ...styles.eventTypeCard, ...(eventType === t.key ? styles.eventTypeCardActive : {}), ...(!durationLocked ? { cursor: "default" } : {}) }}>
+                      <div style={{ ...styles.eventTypeRadio, ...(eventType === t.key ? styles.eventTypeRadioActive : {}) }}>
+                        {eventType === t.key && <div style={styles.eventTypeRadioDot} />}
+                      </div>
+                      <div>
+                        <div style={{ ...styles.eventTypeLabel, ...(eventType === t.key ? styles.eventTypeLabelActive : {}) }}>{t.label}</div>
+                        <div style={styles.eventTypeDesc}>{t.desc}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                <div style={styles.scheduleDivider} />
+
+                {durationLocked && eventType === "single" && (
+                  <div>
+                    {availSets.map((set, i) => (
+                      <AvailabilitySet key={set.id} set={set} index={i} colors={SET_COLORS[i % SET_COLORS.length]}
+                        onToggleDate={(dateStr) => toggleDateInSet(i, dateStr)} onChangeTime={(field, val) => changeTimeInSet(i, field, val)}
+                        onRemove={() => removeSet(i)} canRemove={availSets.length > 1}
+                        collapsed={availSets.length > 1 && expandedSet !== i} onExpand={() => setExpandedSet(i)} />
+                    ))}
+                    {availSets.length < 5 && (
+                      <button onClick={addSet} style={styles.addSetBtn}><PlusIcon /><span>Add another availability</span></button>
+                    )}
+                    <div style={styles.setsSummary}>
+                      <InfoIcon />
+                      <span>{totalSelectedDates} date{totalSelectedDates !== 1 ? "s" : ""} across {availSets.length} availability set{availSets.length !== 1 ? "s" : ""}{availSets.length > 1 && " — each set has its own time window"}</span>
+                    </div>
+                  </div>
+                )}
+
+                {durationLocked && eventType === "recurring" && (
+                  <div style={styles.cadenceSection}>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Cadence</label>
+                      <div style={styles.cadenceOptions}>
+                        {CADENCES.map((c) => (
+                          <button key={c} onClick={() => setCadence(c)} style={{ ...styles.cadenceChip, ...(cadence === c ? styles.cadenceChipActive : {}) }}>{c}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel}>Preferred day</label>
+                      <div style={styles.dayRow}>
+                        {DAYS_OF_WEEK.map((day) => (
+                          <button key={day} onClick={() => setCadenceDay(day)} style={{ ...styles.dayChip, ...(cadenceDay === day ? styles.dayChipActive : {}) }}>{day}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={styles.timeRange}>
+                      <div style={styles.timeField}>
+                        <label style={styles.fieldLabelSmall}>Earliest start</label>
+                        <div style={styles.selectWrap}>
+                          <select value={availSets[0]?.timeStart || "9:00 AM"} onChange={(e) => changeTimeInSet(0, "timeStart", e.target.value)} style={styles.select}>
+                            {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
+                          </select>
+                          <div style={styles.selectArrow}><ChevronDown /></div>
+                        </div>
+                      </div>
+                      <div style={styles.timeDash}>—</div>
+                      <div style={styles.timeField}>
+                        <label style={styles.fieldLabelSmall}>Latest end</label>
+                        <div style={styles.selectWrap}>
+                          <select value={availSets[0]?.timeEnd || "5:00 PM"} onChange={(e) => changeTimeInSet(0, "timeEnd", e.target.value)} style={styles.select}>
+                            {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
+                          </select>
+                          <div style={styles.selectArrow}><ChevronDown /></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {durationLocked && eventType === "limited" && (
+                  <div style={styles.cadenceSection}>
+                    <div style={styles.limitedRow}>
+                      <div style={styles.fieldGroup}>
+                        <label style={styles.fieldLabel}>Number of sessions</label>
+                        <input type="number" value={seriesCount} onChange={(e) => setSeriesCount(Math.max(1, parseInt(e.target.value) || 1))} style={styles.numberInput} min="1" />
+                      </div>
+                      <div style={styles.fieldGroup}>
+                        <label style={styles.fieldLabel}>Over what period</label>
+                        <div style={styles.selectWrap}>
+                          <select value={seriesPeriod} onChange={(e) => setSeriesPeriod(e.target.value)} style={styles.select}>
+                            <option>1 week</option><option>2 weeks</option><option>3 weeks</option><option>1 month</option><option>2 months</option><option>3 months</option>
+                          </select>
+                          <div style={styles.selectArrow}><ChevronDown /></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={styles.timeRange}>
+                      <div style={styles.timeField}>
+                        <label style={styles.fieldLabelSmall}>Earliest start</label>
+                        <div style={styles.selectWrap}>
+                          <select value={availSets[0]?.timeStart || "9:00 AM"} onChange={(e) => changeTimeInSet(0, "timeStart", e.target.value)} style={styles.select}>
+                            {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
+                          </select>
+                          <div style={styles.selectArrow}><ChevronDown /></div>
+                        </div>
+                      </div>
+                      <div style={styles.timeDash}>—</div>
+                      <div style={styles.timeField}>
+                        <label style={styles.fieldLabelSmall}>Latest end</label>
+                        <div style={styles.selectWrap}>
+                          <select value={availSets[0]?.timeEnd || "5:00 PM"} onChange={(e) => changeTimeInSet(0, "timeEnd", e.target.value)} style={styles.select}>
+                            {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
+                          </select>
+                          <div style={styles.selectArrow}><ChevronDown /></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -364,131 +689,6 @@ export default function QuorumSchedulingForm() {
           )}
 
           {step === 2 && (
-            <div>
-              <h3 style={styles.stepTitle}>When should this happen?</h3>
-              <p style={styles.stepDesc}>Choose an event type, then define your availability. Quorum will cross-reference with location availability.</p>
-              <div style={styles.eventTypeRow}>
-                {[
-                  { key: "single", label: "Single Event", desc: "One-time gathering" },
-                  { key: "recurring", label: "Recurring Series", desc: "Regular cadence" },
-                  { key: "limited", label: "Limited Series", desc: "Set number of sessions" },
-                ].map((t) => (
-                  <button key={t.key} onClick={() => setEventType(t.key)} style={{ ...styles.eventTypeCard, ...(eventType === t.key ? styles.eventTypeCardActive : {}) }}>
-                    <div style={{ ...styles.eventTypeRadio, ...(eventType === t.key ? styles.eventTypeRadioActive : {}) }}>
-                      {eventType === t.key && <div style={styles.eventTypeRadioDot} />}
-                    </div>
-                    <div>
-                      <div style={{ ...styles.eventTypeLabel, ...(eventType === t.key ? styles.eventTypeLabelActive : {}) }}>{t.label}</div>
-                      <div style={styles.eventTypeDesc}>{t.desc}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <div style={styles.scheduleDivider} />
-
-              {eventType === "single" && (
-                <div>
-                  {availSets.map((set, i) => (
-                    <AvailabilitySet key={set.id} set={set} index={i} colors={SET_COLORS[i % SET_COLORS.length]} dates={dates}
-                      onToggleDate={(dateStr) => toggleDateInSet(i, dateStr)} onChangeTime={(field, val) => changeTimeInSet(i, field, val)}
-                      onRemove={() => removeSet(i)} canRemove={availSets.length > 1} />
-                  ))}
-                  {availSets.length < 5 && (
-                    <button onClick={addSet} style={styles.addSetBtn}><PlusIcon /><span>Add another availability</span></button>
-                  )}
-                  <div style={styles.setsSummary}>
-                    <InfoIcon />
-                    <span>{totalSelectedDates} date{totalSelectedDates !== 1 ? "s" : ""} across {availSets.length} availability set{availSets.length !== 1 ? "s" : ""}{availSets.length > 1 && " — each set has its own time window"}</span>
-                  </div>
-                </div>
-              )}
-
-              {eventType === "recurring" && (
-                <div style={styles.cadenceSection}>
-                  <div style={styles.fieldGroup}>
-                    <label style={styles.fieldLabel}>Cadence</label>
-                    <div style={styles.cadenceOptions}>
-                      {CADENCES.map((c) => (
-                        <button key={c} onClick={() => setCadence(c)} style={{ ...styles.cadenceChip, ...(cadence === c ? styles.cadenceChipActive : {}) }}>{c}</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={styles.fieldGroup}>
-                    <label style={styles.fieldLabel}>Preferred day</label>
-                    <div style={styles.dayRow}>
-                      {DAYS_OF_WEEK.map((day) => (
-                        <button key={day} onClick={() => setCadenceDay(day)} style={{ ...styles.dayChip, ...(cadenceDay === day ? styles.dayChipActive : {}) }}>{day}</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={styles.timeRange}>
-                    <div style={styles.timeField}>
-                      <label style={styles.fieldLabelSmall}>Earliest start</label>
-                      <div style={styles.selectWrap}>
-                        <select value={availSets[0]?.timeStart || "9:00 AM"} onChange={(e) => changeTimeInSet(0, "timeStart", e.target.value)} style={styles.select}>
-                          {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
-                        </select>
-                        <div style={styles.selectArrow}><ChevronDown /></div>
-                      </div>
-                    </div>
-                    <div style={styles.timeDash}>—</div>
-                    <div style={styles.timeField}>
-                      <label style={styles.fieldLabelSmall}>Latest end</label>
-                      <div style={styles.selectWrap}>
-                        <select value={availSets[0]?.timeEnd || "5:00 PM"} onChange={(e) => changeTimeInSet(0, "timeEnd", e.target.value)} style={styles.select}>
-                          {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
-                        </select>
-                        <div style={styles.selectArrow}><ChevronDown /></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {eventType === "limited" && (
-                <div style={styles.cadenceSection}>
-                  <div style={styles.limitedRow}>
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>Number of sessions</label>
-                      <input type="number" value={seriesCount} onChange={(e) => setSeriesCount(Math.max(1, parseInt(e.target.value) || 1))} style={styles.numberInput} min="1" />
-                    </div>
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>Over what period</label>
-                      <div style={styles.selectWrap}>
-                        <select value={seriesPeriod} onChange={(e) => setSeriesPeriod(e.target.value)} style={styles.select}>
-                          <option>1 week</option><option>2 weeks</option><option>3 weeks</option><option>1 month</option><option>2 months</option><option>3 months</option>
-                        </select>
-                        <div style={styles.selectArrow}><ChevronDown /></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div style={styles.timeRange}>
-                    <div style={styles.timeField}>
-                      <label style={styles.fieldLabelSmall}>Earliest start</label>
-                      <div style={styles.selectWrap}>
-                        <select value={availSets[0]?.timeStart || "9:00 AM"} onChange={(e) => changeTimeInSet(0, "timeStart", e.target.value)} style={styles.select}>
-                          {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
-                        </select>
-                        <div style={styles.selectArrow}><ChevronDown /></div>
-                      </div>
-                    </div>
-                    <div style={styles.timeDash}>—</div>
-                    <div style={styles.timeField}>
-                      <label style={styles.fieldLabelSmall}>Latest end</label>
-                      <div style={styles.selectWrap}>
-                        <select value={availSets[0]?.timeEnd || "5:00 PM"} onChange={(e) => changeTimeInSet(0, "timeEnd", e.target.value)} style={styles.select}>
-                          {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
-                        </select>
-                        <div style={styles.selectArrow}><ChevronDown /></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {step === 3 && (
             <div>
               <h3 style={styles.stepTitle}>Set your attendance thresholds</h3>
               <p style={styles.stepDesc}>Quorum locks in the gathering once the minimum is reached. Overflow creates new sessions from excess demand.</p>
@@ -548,7 +748,7 @@ export default function QuorumSchedulingForm() {
         <div style={styles.navRow}>
           {step > 0 && <button onClick={() => setStep(step - 1)} style={styles.backBtn}>Back</button>}
           <div style={{ flex: 1 }} />
-          {step < 3 ? (
+          {step < 2 ? (
             <button onClick={() => canAdvance() && setStep(step + 1)} style={{ ...styles.primaryBtn, ...(canAdvance() ? {} : styles.primaryBtnDisabled) }} disabled={!canAdvance()}>Continue</button>
           ) : (
             <button onClick={() => canAdvance() && setPublished(true)} style={{ ...styles.publishBtn, ...(canAdvance() ? {} : styles.primaryBtnDisabled) }} disabled={!canAdvance()}>Publish Gathering</button>
@@ -580,7 +780,16 @@ const styles = {
   stepContent: { padding: "24px 32px", minHeight: 300 },
   stepTitle: { fontSize: 18, fontWeight: 700, color: "#1a2332", margin: "0 0 6px", letterSpacing: -0.3 },
   stepDesc: { fontSize: 14, color: "#7a8a9a", margin: "0 0 24px", lineHeight: 1.5 },
-  durationGrid: { display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 },
+  durationSection: { padding: "20px", borderRadius: 14, border: "1.5px solid #e0e5eb", background: "#fafbfc", marginBottom: 0 },
+  durationSectionLocked: { background: "#f0f6ff", borderColor: "#c4ddf0" },
+  durationSectionHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+  lockBtn: { width: 36, height: 36, borderRadius: 10, border: "1.5px solid #e0e5eb", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#9aa5b4", transition: "all 0.2s", flexShrink: 0 },
+  lockBtnLocked: { borderColor: "#2e86c1", background: "#eaf4fb", color: "#2e86c1" },
+  durationLockedSummary: { display: "flex", alignItems: "center", gap: 10, marginTop: 4, color: "#1a5276", fontSize: 15, fontWeight: 600 },
+  durationLockedText: { fontSize: 16 },
+  lockCustomBtn: { padding: "8px 16px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #1a5276 0%, #2e86c1 100%)", fontSize: 13, fontWeight: 600, color: "#fff", cursor: "pointer", fontFamily: "inherit", marginLeft: 8, whiteSpace: "nowrap" },
+  scheduleDisabled: { opacity: 0.35, pointerEvents: "none", filter: "grayscale(0.5)" },
+  durationGrid: { display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20, marginTop: 4 },
   durationChip: { padding: "10px 20px", borderRadius: 10, border: "1.5px solid #e0e5eb", background: "#fafbfc", fontSize: 14, fontWeight: 500, color: "#4a5568", cursor: "pointer", transition: "all 0.2s", fontFamily: "inherit" },
   durationChipActive: { borderColor: "#2e86c1", background: "#eaf4fb", color: "#1a5276", fontWeight: 600 },
   customDuration: { display: "flex", alignItems: "center", gap: 12 },
@@ -619,14 +828,26 @@ const styles = {
   setTitle: { fontSize: 13, fontWeight: 700, color: "#1a2332" },
   setDateCount: { fontSize: 12, color: "#7a8a9a", fontWeight: 500 },
   setRemoveBtn: { padding: "6px 8px", borderRadius: 8, border: "none", background: "transparent", color: "#b0bac5", cursor: "pointer", display: "flex", alignItems: "center", transition: "color 0.2s" },
+  collapsedBody: { padding: "10px 16px 12px", display: "flex", flexDirection: "column", gap: 6 },
+  collapsedRow: { display: "flex", alignItems: "center", gap: 8, color: "#5a6a7a", fontSize: 13 },
+  collapsedText: { lineHeight: 1.4 },
   setSection: { padding: "14px 16px" },
   setSectionLabel: { fontSize: 12, fontWeight: 600, color: "#6a7585", display: "block", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 },
-  calendarGrid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 },
-  dateCell: { display: "flex", flexDirection: "column", alignItems: "center", padding: "7px 3px", borderRadius: 8, border: "1.5px solid #e8ecf0", background: "#fafbfc", cursor: "pointer", transition: "all 0.15s", fontFamily: "inherit", gap: 1 },
-  dateCellSelected: { color: "#fff" },
-  dateCellWeekend: { background: "#f5f5f5", borderColor: "#eaeaea" },
-  dateDayName: { fontSize: 9, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5, opacity: 0.7 },
-  dateNumber: { fontSize: 11, fontWeight: 600 },
+  calNavRow: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  calNavBtn: { width: 32, height: 32, borderRadius: 8, border: "1.5px solid #e0e5eb", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#4a5568", transition: "all 0.15s", fontFamily: "inherit" },
+  calMonthLabel: { fontSize: 15, fontWeight: 700, color: "#1a2332", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", fontFamily: "inherit", padding: "4px 8px", borderRadius: 8, transition: "background 0.15s" },
+  yearPickerRow: { display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 },
+  yearChip: { padding: "6px 16px", borderRadius: 8, border: "1.5px solid #e0e5eb", background: "#fafbfc", fontSize: 13, fontWeight: 600, color: "#4a5568", cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" },
+  yearChipActive: { borderColor: "#2e86c1", background: "#eaf4fb", color: "#1a5276" },
+  calDayHeaders: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 },
+  calDayHeader: { textAlign: "center", fontSize: 11, fontWeight: 600, color: "#9aa5b4", textTransform: "uppercase", padding: "4px 0" },
+  calGrid: { display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 },
+  calEmpty: { aspectRatio: "1", minHeight: 36 },
+  calCell: { aspectRatio: "1", minHeight: 36, borderRadius: 8, border: "1.5px solid #e8ecf0", background: "#fff", cursor: "pointer", transition: "all 0.15s", fontFamily: "inherit", fontSize: 13, fontWeight: 600, color: "#1a2332", display: "flex", alignItems: "center", justifyContent: "center" },
+  calCellPast: { opacity: 0.3, cursor: "default", background: "#f5f5f5" },
+  calCellWeekend: { background: "#f9f9fb", borderColor: "#eaeaea" },
+  calCellToday: { borderColor: "#2e86c1", borderWidth: 2 },
+  calCellSelected: { color: "#fff", borderWidth: 2 },
   timeRange: { display: "flex", alignItems: "flex-end", gap: 12 },
   timeField: { flex: 1 },
   timeDash: { paddingBottom: 12, color: "#b0bac5", fontWeight: 500 },
