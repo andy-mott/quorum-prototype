@@ -1,0 +1,74 @@
+flowchart LR
+    %% Phase 1: Create Draft
+    A["🎯 Host Creates Draft Gathering"] --> B["Set event type\n(single / recurring series / limited series)"]
+    B --> C["Enter basics\n(title, description, hosts, format, quorum, capacity)"]
+    C --> D{"Open to multiple\ngatherings?"}
+    D -- Yes --> E["Enable overflow toggle"]
+    D -- No --> F["Continue"]
+    E --> F
+
+    %% Phase 2: Scheduling & Location
+    F --> G["⏱️ Set Duration"]
+    G --> H["📍 Select Potential Locations"]
+    H --> I["📅 Define Time Preferences"]
+
+    I --> I1{"Event type?"}
+    I1 -- Single --> I2["Select specific days & time windows"]
+    I1 -- Recurring series --> I3["Define cadence\n(e.g. 2nd & 4th Thursdays)"]
+    I1 -- Limited series --> I4["Define frequency over period\n(e.g. twice in 2 weeks)"]
+
+    I2 --> J["🔀 Quorum Matches\nHost Times × Location Availability"]
+    I3 --> J
+    I4 --> J
+
+    J --> K["Host Reviews Viable Options"]
+    K --> L{"Remove any\noptions?"}
+    L -- Yes --> K
+    L -- No --> M["✅ Publish Gathering"]
+
+    %% Phase 3: Invitee Selection
+    M --> N["📨 Invitees Notified\n(email invite or shared link)"]
+    N --> O["Invitees View Options"]
+    O --> P["Rank top 3 preferences\n(or vote on cadence for series)"]
+    P --> Q["Mark times that don't work"]
+
+    %% Phase 4: Quorum & Confirmation
+    Q --> R{"Quorum\nreached?"}
+    R -- Not yet --> O
+    R -- Yes --> S["🔔 Host Notified Immediately"]
+    S --> T{"Host locks\nit in?"}
+    T -- Not yet --> T
+    T -- Yes --> U["🔒 Gathering Confirmed\n(date / time / location locked)"]
+
+    %% Invitee Handling
+    U --> V{"Did invitee mark\nconfirmed time\nas unavailable?"}
+    V -- No --> W["📩 Formal Invitation Sent"]
+    V -- Yes --> X["Not invited to this gathering\n(candidate for overflow)"]
+    W --> Y{"Accepted within\ntimeframe?"}
+    Y -- Yes --> Z["✅ Registered"]
+    Y -- No --> AA["Spot released"]
+
+    %% Capacity Check
+    Z --> BB{"Capacity\nreached?"}
+    AA --> BB
+    BB -- No --> BC["Registration remains open"]
+    BB -- Yes --> DD["📋 Waitlist Created"]
+
+    %% Phase 5: Overflow
+    DD --> EE{"Multiple gatherings\nenabled?"}
+    EE -- No --> FF["🏁 Done"]
+    EE -- Yes --> GG["Waitlisted + unavailable invitees\nselect from remaining slots"]
+    GG --> HH{"New quorum\nreached?"}
+    HH -- Not yet --> GG
+    HH -- Yes --> II["🔔 Host Notified"]
+    II --> JJ["Host confirms new gathering"]
+    JJ --> U
+
+    %% Styling
+    style A fill:#4A90D9,stroke:#2C5F8A,color:#fff
+    style M fill:#27AE60,stroke:#1E8449,color:#fff
+    style U fill:#E67E22,stroke:#BA6318,color:#fff
+    style Z fill:#27AE60,stroke:#1E8449,color:#fff
+    style DD fill:#8E44AD,stroke:#6C3483,color:#fff
+    style FF fill:#2C3E50,stroke:#1A252F,color:#fff
+    style J fill:#F39C12,stroke:#C47F0E,color:#fff
