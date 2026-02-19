@@ -152,6 +152,10 @@ function createEmptySet() {
   return { id: Date.now(), dates: [], timeStart: "9:00 AM", timeEnd: "5:00 PM" };
 }
 
+function createEmptyRecurringSet() {
+  return { id: Date.now(), cadence: "", days: [], timeStart: "9:00 AM", timeEnd: "5:00 PM" };
+}
+
 const CheckIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
     <path d="M2.5 7.5L5.5 10.5L11.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -334,6 +338,101 @@ function AvailabilitySet({ set, index, colors, onToggleDate, onChangeTime, onRem
   );
 }
 
+function RecurringAvailabilitySet({ set, index, colors, onChangeCadence, onToggleDay, onChangeTime, onRemove, canRemove, collapsed, onExpand }) {
+  if (collapsed) {
+    return (
+      <div
+        style={{ ...styles.setCard, borderColor: colors.border, background: "#fff", cursor: "pointer" }}
+        onClick={onExpand}
+      >
+        <div style={{ ...styles.setHeader, background: colors.bg }}>
+          <div style={styles.setHeaderLeft}>
+            <div style={{ ...styles.setDot, background: colors.accent }} />
+            <span style={styles.setTitle}>Availability {index + 1}</span>
+            <span style={styles.setDateCount}>{set.days.length} day{set.days.length !== 1 ? "s" : ""}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {canRemove && (
+              <button onClick={(e) => { e.stopPropagation(); onRemove(); }} style={styles.setRemoveBtn}><TrashIcon /></button>
+            )}
+            <div style={{ color: "#9aa5b4", transform: "rotate(-90deg)", display: "flex" }}><ChevronDown /></div>
+          </div>
+        </div>
+        <div style={styles.collapsedBody}>
+          <div style={styles.collapsedRow}>
+            <CalendarIcon />
+            <span style={styles.collapsedText}>{set.cadence || "No cadence set"} — {set.days.length > 0 ? set.days.join(", ") : "No days selected"}</span>
+          </div>
+          <div style={styles.collapsedRow}>
+            <ClockIcon />
+            <span style={styles.collapsedText}>{set.timeStart} — {set.timeEnd}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...styles.setCard, borderColor: colors.border, background: "#fff" }}>
+      <div style={{ ...styles.setHeader, background: colors.bg }}>
+        <div style={styles.setHeaderLeft}>
+          <div style={{ ...styles.setDot, background: colors.accent }} />
+          <span style={styles.setTitle}>Availability {index + 1}</span>
+          <span style={styles.setDateCount}>{set.days.length} day{set.days.length !== 1 ? "s" : ""}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {canRemove && (
+            <button onClick={onRemove} style={styles.setRemoveBtn}><TrashIcon /></button>
+          )}
+        </div>
+      </div>
+      <div style={styles.setSection}>
+        <label style={styles.setSectionLabel}>Cadence</label>
+        <div style={styles.cadenceOptions}>
+          {CADENCES.map((c) => (
+            <button key={c} onClick={() => onChangeCadence(c)} style={{ ...styles.cadenceChip, ...(set.cadence === c ? { ...styles.cadenceChipActive, borderColor: colors.accent, background: colors.light, color: colors.accent } : {}) }}>{c}</button>
+          ))}
+        </div>
+      </div>
+      <div style={styles.setSection}>
+        <label style={styles.setSectionLabel}>Preferred days</label>
+        <div style={styles.dayRow}>
+          {DAYS_OF_WEEK.map((day) => {
+            const selected = set.days.includes(day);
+            return (
+              <button key={day} onClick={() => onToggleDay(day)} style={{ ...styles.dayChip, ...(selected ? { ...styles.dayChipActive, background: colors.accent, borderColor: colors.accent } : {}) }}>{day}</button>
+            );
+          })}
+        </div>
+      </div>
+      <div style={styles.setSection}>
+        <label style={styles.setSectionLabel}>Time window</label>
+        <div style={styles.timeRange}>
+          <div style={styles.timeField}>
+            <label style={styles.fieldLabelSmall}>Earliest start</label>
+            <div style={styles.selectWrap}>
+              <select value={set.timeStart} onChange={(e) => onChangeTime("timeStart", e.target.value)} style={styles.select}>
+                {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
+              </select>
+              <div style={styles.selectArrow}><ChevronDown /></div>
+            </div>
+          </div>
+          <div style={styles.timeDash}>—</div>
+          <div style={styles.timeField}>
+            <label style={styles.fieldLabelSmall}>Latest end</label>
+            <div style={styles.selectWrap}>
+              <select value={set.timeEnd} onChange={(e) => onChangeTime("timeEnd", e.target.value)} style={styles.select}>
+                {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
+              </select>
+              <div style={styles.selectArrow}><ChevronDown /></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function QuorumSchedulingForm() {
   const [step, setStep] = useState(0);
   const [eventType, setEventType] = useState("single");
@@ -351,6 +450,8 @@ export default function QuorumSchedulingForm() {
   const [published, setPublished] = useState(false);
   const [expandedSet, setExpandedSet] = useState(0);
   const [durationLocked, setDurationLocked] = useState(false);
+  const [recurringSets, setRecurringSets] = useState([createEmptyRecurringSet()]);
+  const [expandedRecurringSet, setExpandedRecurringSet] = useState(0);
 
   const toggleLocation = (id) => {
     setSelectedLocations((prev) => prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]);
@@ -381,6 +482,36 @@ export default function QuorumSchedulingForm() {
     });
   };
 
+  const changeCadenceInRecurringSet = (setIndex, cadence) => {
+    setRecurringSets((prev) => prev.map((s, i) => i === setIndex ? { ...s, cadence } : s));
+  };
+
+  const toggleDayInRecurringSet = (setIndex, day) => {
+    setRecurringSets((prev) => prev.map((s, i) =>
+      i === setIndex ? { ...s, days: s.days.includes(day) ? s.days.filter((d) => d !== day) : [...s.days, day] } : s
+    ));
+  };
+
+  const changeTimeInRecurringSet = (setIndex, field, value) => {
+    setRecurringSets((prev) => prev.map((s, i) => i === setIndex ? { ...s, [field]: value } : s));
+  };
+
+  const addRecurringSet = () => {
+    if (recurringSets.length < 5) {
+      setRecurringSets((prev) => [...prev, createEmptyRecurringSet()]);
+      setExpandedRecurringSet(recurringSets.length);
+    }
+  };
+
+  const removeRecurringSet = (setIndex) => {
+    setRecurringSets((prev) => prev.filter((_, i) => i !== setIndex));
+    setExpandedRecurringSet((prev) => {
+      if (prev === setIndex) return Math.max(0, setIndex - 1);
+      if (prev > setIndex) return prev - 1;
+      return prev;
+    });
+  };
+
   const totalSelectedDates = availSets.reduce((sum, s) => sum + s.dates.length, 0);
 
   const formatDurationLabel = (d) => {
@@ -398,7 +529,7 @@ export default function QuorumSchedulingForm() {
     if (step === 0) {
       if (!durationLocked) return false;
       if (eventType === "single") return totalSelectedDates > 0;
-      if (eventType === "recurring") return cadence && cadenceDay;
+      if (eventType === "recurring") return recurringSets.some((s) => s.cadence && s.days.length > 0);
       if (eventType === "limited") return seriesCount > 0;
     }
     if (step === 1) return format === "virtual" || selectedLocations.length > 0;
@@ -408,7 +539,7 @@ export default function QuorumSchedulingForm() {
 
   const matchCount = eventType === "single"
     ? totalSelectedDates * (format === "virtual" ? 1 : Math.max(selectedLocations.length, 1))
-    : eventType === "recurring" ? (format === "virtual" ? 1 : Math.max(selectedLocations.length, 1)) * 4
+    : eventType === "recurring" ? (format === "virtual" ? 1 : Math.max(selectedLocations.length, 1)) * recurringSets.reduce((sum, s) => sum + s.days.length, 0) * 4
     : seriesCount * (format === "virtual" ? 1 : Math.max(selectedLocations.length, 1));
 
   if (published) {
@@ -444,7 +575,7 @@ export default function QuorumSchedulingForm() {
                 <span style={styles.publishedStatValue}>{overflow ? "On" : "Off"}</span>
               </div>
             </div>
-            <button style={{ ...styles.primaryBtn, marginTop: 24, maxWidth: 240 }} onClick={() => { setPublished(false); setStep(0); setAvailSets([createEmptySet()]); }}>
+            <button style={{ ...styles.primaryBtn, marginTop: 24, maxWidth: 240 }} onClick={() => { setPublished(false); setStep(0); setAvailSets([createEmptySet()]); setRecurringSets([createEmptyRecurringSet()]); setDuration(null); setDurationLocked(false); }}>
               Start New Gathering
             </button>
           </div>
@@ -567,43 +698,21 @@ export default function QuorumSchedulingForm() {
                 )}
 
                 {durationLocked && eventType === "recurring" && (
-                  <div style={styles.cadenceSection}>
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>Cadence</label>
-                      <div style={styles.cadenceOptions}>
-                        {CADENCES.map((c) => (
-                          <button key={c} onClick={() => setCadence(c)} style={{ ...styles.cadenceChip, ...(cadence === c ? styles.cadenceChipActive : {}) }}>{c}</button>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel}>Preferred day</label>
-                      <div style={styles.dayRow}>
-                        {DAYS_OF_WEEK.map((day) => (
-                          <button key={day} onClick={() => setCadenceDay(day)} style={{ ...styles.dayChip, ...(cadenceDay === day ? styles.dayChipActive : {}) }}>{day}</button>
-                        ))}
-                      </div>
-                    </div>
-                    <div style={styles.timeRange}>
-                      <div style={styles.timeField}>
-                        <label style={styles.fieldLabelSmall}>Earliest start</label>
-                        <div style={styles.selectWrap}>
-                          <select value={availSets[0]?.timeStart || "9:00 AM"} onChange={(e) => changeTimeInSet(0, "timeStart", e.target.value)} style={styles.select}>
-                            {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
-                          </select>
-                          <div style={styles.selectArrow}><ChevronDown /></div>
-                        </div>
-                      </div>
-                      <div style={styles.timeDash}>—</div>
-                      <div style={styles.timeField}>
-                        <label style={styles.fieldLabelSmall}>Latest end</label>
-                        <div style={styles.selectWrap}>
-                          <select value={availSets[0]?.timeEnd || "5:00 PM"} onChange={(e) => changeTimeInSet(0, "timeEnd", e.target.value)} style={styles.select}>
-                            {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
-                          </select>
-                          <div style={styles.selectArrow}><ChevronDown /></div>
-                        </div>
-                      </div>
+                  <div>
+                    {recurringSets.map((set, i) => (
+                      <RecurringAvailabilitySet key={set.id} set={set} index={i} colors={SET_COLORS[i % SET_COLORS.length]}
+                        onChangeCadence={(c) => changeCadenceInRecurringSet(i, c)}
+                        onToggleDay={(day) => toggleDayInRecurringSet(i, day)}
+                        onChangeTime={(field, val) => changeTimeInRecurringSet(i, field, val)}
+                        onRemove={() => removeRecurringSet(i)} canRemove={recurringSets.length > 1}
+                        collapsed={recurringSets.length > 1 && expandedRecurringSet !== i} onExpand={() => setExpandedRecurringSet(i)} />
+                    ))}
+                    {recurringSets.length < 5 && (
+                      <button onClick={addRecurringSet} style={styles.addSetBtn}><PlusIcon /><span>Add another availability</span></button>
+                    )}
+                    <div style={styles.setsSummary}>
+                      <InfoIcon />
+                      <span>{recurringSets.reduce((sum, s) => sum + s.days.length, 0)} day{recurringSets.reduce((sum, s) => sum + s.days.length, 0) !== 1 ? "s" : ""} across {recurringSets.length} availability set{recurringSets.length !== 1 ? "s" : ""}{recurringSets.length > 1 && " — each set has its own cadence and time window"}</span>
                     </div>
                   </div>
                 )}
