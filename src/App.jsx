@@ -508,23 +508,22 @@ function AvailabilitySet({ set, index, colors, onToggleDate, onChangeTime, onRem
         </div>
       </div>
       <div style={styles.setSection}>
-        <label style={styles.setSectionLabel}>Select dates</label>
-        <CalendarWidget
-          selectedDates={set.dates}
-          onToggleDate={onToggleDate}
-          accentColor={colors.accent}
-          duration={duration}
-          windowStart={set.timeStart}
-          windowEnd={set.timeEnd}
-        />
-      </div>
-      <div style={styles.setSection}>
-        <label style={styles.setSectionLabel}>Time window for these dates</label>
+        <label style={styles.setSectionLabel}>Time window</label>
         <div style={styles.timeRange}>
           <div style={styles.timeField}>
             <label style={styles.fieldLabelSmall}>Earliest start</label>
             <div style={styles.selectWrap}>
-              <select value={set.timeStart} onChange={(e) => onChangeTime("timeStart", e.target.value)} style={styles.select}>
+              <select value={set.timeStart} onChange={(e) => {
+                onChangeTime("timeStart", e.target.value);
+                const newStartHr = parseTimeToHour(e.target.value);
+                const endHr = parseTimeToHour(set.timeEnd);
+                if (newStartHr >= endHr) {
+                  const minEndHr = newStartHr + (duration || 60) / 60;
+                  const best = TIME_SLOTS.find(t => parseTimeToHour(t) >= minEndHr);
+                  if (best) onChangeTime("timeEnd", best);
+                  else onChangeTime("timeEnd", TIME_SLOTS[TIME_SLOTS.length - 1]);
+                }
+              }} style={styles.select}>
                 {TIME_SLOTS.map((t) => <option key={t}>{t}</option>)}
               </select>
               <div style={styles.selectArrow}><ChevronDown /></div>
@@ -541,6 +540,17 @@ function AvailabilitySet({ set, index, colors, onToggleDate, onChangeTime, onRem
             </div>
           </div>
         </div>
+      </div>
+      <div style={styles.setSection}>
+        <label style={styles.setSectionLabel}>Select dates</label>
+        <CalendarWidget
+          selectedDates={set.dates}
+          onToggleDate={onToggleDate}
+          accentColor={colors.accent}
+          duration={duration}
+          windowStart={set.timeStart}
+          windowEnd={set.timeEnd}
+        />
       </div>
     </div>
   );
