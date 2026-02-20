@@ -15,6 +15,11 @@ const MOCK_GATHERING = {
   totalInvited: 12,
 };
 
+const ALL_LOCATIONS = [
+  { name: "Community Center \u2014 Room A", address: "142 Main St" },
+  { name: "Downtown Library \u2014 Meeting Room 3", address: "88 Elm Ave" },
+];
+
 const MOCK_OPTIONS = [
   { id: "opt-1", date: "2026-03-05", timeStart: "9:00 AM", timeEnd: "11:00 AM", locationName: "Community Center \u2014 Room A", locationAddr: "142 Main St" },
   { id: "opt-2", date: "2026-03-05", timeStart: "9:00 AM", timeEnd: "11:00 AM", locationName: "Downtown Library \u2014 Meeting Room 3", locationAddr: "88 Elm Ave" },
@@ -26,53 +31,54 @@ const MOCK_OPTIONS = [
   { id: "opt-8", date: "2026-03-12", timeStart: "2:00 PM", timeEnd: "4:00 PM", locationName: "Downtown Library \u2014 Meeting Room 3", locationAddr: "88 Elm Ave" },
 ];
 
-// --- Mock Invitee Calendar Data ---
-const INVITEE_EVENTS_WEEKDAY = [
-  { start: 8.5, end: 9.5, title: "Morning workout", color: "#0b8043" },
-  { start: 11, end: 12, title: "Client call", color: "#4285f4" },
-  { start: 12.5, end: 13, title: "Lunch", color: "#7986cb" },
-  { start: 15, end: 16, title: "Team retro", color: "#e67c73" },
-];
+// --- Derive timeslots by grouping options on date + time ---
+const TIMESLOTS = (() => {
+  const map = {};
+  for (const opt of MOCK_OPTIONS) {
+    const key = `${opt.date}|${opt.timeStart}|${opt.timeEnd}`;
+    if (!map[key]) {
+      map[key] = {
+        id: `ts-${Object.keys(map).length + 1}`,
+        date: opt.date,
+        timeStart: opt.timeStart,
+        timeEnd: opt.timeEnd,
+        locations: [],
+      };
+    }
+    map[key].locations.push({ name: opt.locationName, address: opt.locationAddr });
+  }
+  return Object.values(map);
+})();
 
-const INVITEE_EVENTS_VARIANTS = [
-  [
-    { start: 9, end: 10.5, title: "All-hands meeting", color: "#4285f4" },
-    { start: 11, end: 12, title: "Dentist appointment", color: "#f4511e" },
-    { start: 12.5, end: 13, title: "Lunch", color: "#7986cb" },
-    { start: 14, end: 15, title: "Design sync", color: "#e67c73" },
+// --- Deterministic Mock Calendar Events Per Date ---
+// Mar 5: morning conflict -> amber (9-11 AM window)
+// Mar 6: fully free morning -> green (9-11 AM window)
+// Mar 10: packed afternoon -> red (2-4 PM window)
+// Mar 12: partial conflict -> amber (2-4 PM window)
+const DETERMINISTIC_EVENTS = {
+  "2026-03-05": [
+    { start: 9, end: 10, title: "Team standup", color: "#4285f4" },
+    { start: 12, end: 13, title: "Lunch", color: "#7986cb" },
   ],
-  [
-    { start: 9.5, end: 10, title: "Standup", color: "#4285f4" },
-    { start: 12, end: 13, title: "Lunch with friend", color: "#0b8043" },
-    { start: 13.5, end: 15, title: "Deep work block", color: "#7986cb" },
-    { start: 15.5, end: 17, title: "Workshop", color: "#e67c73" },
+  "2026-03-06": [
+    { start: 7.5, end: 8.5, title: "Morning workout", color: "#0b8043" },
+    { start: 12, end: 13, title: "Lunch with friend", color: "#7986cb" },
+    { start: 14, end: 15, title: "Design review", color: "#e67c73" },
   ],
-  [
-    { start: 10, end: 10.5, title: "Quick sync", color: "#4285f4" },
-    { start: 12, end: 12.5, title: "Lunch", color: "#7986cb" },
-  ],
-  [
-    { start: 8, end: 9.5, title: "Yoga class", color: "#0b8043" },
-    { start: 10, end: 11, title: "Product review", color: "#e67c73" },
-    { start: 11.5, end: 12.5, title: "Interview panel", color: "#4285f4" },
-    { start: 13, end: 14, title: "Lunch meeting", color: "#7986cb" },
+  "2026-03-10": [
+    { start: 10, end: 11, title: "All-hands meeting", color: "#4285f4" },
+    { start: 13.5, end: 14.5, title: "Client call", color: "#e67c73" },
     { start: 14.5, end: 16, title: "Strategy planning", color: "#f4511e" },
-    { start: 16.5, end: 17.5, title: "Errands", color: "#0b8043" },
+    { start: 16, end: 17, title: "Errands", color: "#0b8043" },
   ],
-];
-
-const INVITEE_EVENTS_WEEKEND = [
-  { start: 9, end: 10.5, title: "Gym", color: "#0b8043" },
-  { start: 14, end: 15, title: "Grocery run", color: "#7986cb" },
-];
+  "2026-03-12": [
+    { start: 10, end: 11, title: "Product review", color: "#e67c73" },
+    { start: 14, end: 15, title: "Interview panel", color: "#4285f4" },
+    { start: 16, end: 17, title: "Gym", color: "#0b8043" },
+  ],
+};
 
 // --- Utility functions ---
-function seededRandom(dateKey) {
-  let h = 0;
-  for (let i = 0; i < dateKey.length; i++) { h = ((h << 5) - h + dateKey.charCodeAt(i)) | 0; }
-  return Math.abs(h);
-}
-
 function formatHour(h) {
   const hr = Math.floor(h);
   const min = h % 1 === 0.5 ? "30" : "00";
@@ -102,22 +108,10 @@ function getFreeGaps(events, windowStart, windowEnd) {
   return gaps;
 }
 
-function getInviteeMockEventsForDate(dateKey) {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const dt = new Date(y, m - 1, d);
-  const dow = dt.getDay();
-  if (dow === 0 || dow === 6) {
-    return seededRandom(dateKey + "inv") % 3 === 0 ? INVITEE_EVENTS_WEEKEND : [];
-  }
-  const seed = seededRandom(dateKey + "inv");
-  if (seed % 5 === 0) return INVITEE_EVENTS_WEEKDAY;
-  return INVITEE_EVENTS_VARIANTS[seed % INVITEE_EVENTS_VARIANTS.length];
-}
-
-function getOptionAvailability(option) {
-  const events = getInviteeMockEventsForDate(option.date);
-  const startHr = parseTimeToHour(option.timeStart);
-  const endHr = parseTimeToHour(option.timeEnd);
+function getLocationAvailability(dateKey, timeStart, timeEnd) {
+  const events = DETERMINISTIC_EVENTS[dateKey] || [];
+  const startHr = parseTimeToHour(timeStart);
+  const endHr = parseTimeToHour(timeEnd);
   const gaps = getFreeGaps(events, startHr, endHr);
   const durationHours = MOCK_GATHERING.duration / 60;
   const totalFreeHours = gaps.reduce((sum, g) => sum + (g.end - g.start), 0);
@@ -151,6 +145,25 @@ function getOptionAvailability(option) {
   }
 
   return { level, items };
+}
+
+// Timeslot availability = best level among included (non-excluded) locations
+// All locations share the same date/time, so same calendar — but we use
+// "best among included" to model the concept
+function getTimeslotAvailability(timeslot, globalExclusions, perSlotExclusions) {
+  const included = timeslot.locations.filter(loc =>
+    !globalExclusions.has(loc.name) && !(perSlotExclusions[timeslot.id] || new Set()).has(loc.name)
+  );
+  if (included.length === 0) return { level: "red", label: "No locations" };
+
+  const avail = getLocationAvailability(timeslot.date, timeslot.timeStart, timeslot.timeEnd);
+  return avail;
+}
+
+function getIncludedLocationCount(timeslot, globalExclusions, perSlotExclusions) {
+  return timeslot.locations.filter(loc =>
+    !globalExclusions.has(loc.name) && !(perSlotExclusions[timeslot.id] || new Set()).has(loc.name)
+  ).length;
 }
 
 function formatDate(dateStr) {
@@ -213,12 +226,24 @@ const UsersIcon = () => (
   </svg>
 );
 
-const GoogleIcon = () => (
+const ChevronDown = ({ size = 16, style }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={style}>
+    <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const LockIconSmall = () => (
+  <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+    <rect x="3" y="6" width="8" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+    <path d="M5 6V4.5C5 3.12 6.12 2 7.5 2V2C8.88 2 10 3.12 10 4.5V6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);
+
+const CheckboxIcon = ({ checked, locked }) => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-    <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
-    <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+    <rect x="1" y="1" width="16" height="16" rx="4" stroke={locked ? "#c0c8d0" : checked ? "#43a047" : "#b0bac5"} strokeWidth="1.5" fill={locked ? "#f0f2f5" : checked ? "#43a047" : "none"} />
+    {checked && !locked && <path d="M5 9L8 12L13 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}
+    {locked && <path d="M5 9L8 12L13 6" stroke="#b0bac5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}
   </svg>
 );
 
@@ -229,15 +254,17 @@ const RANK_COLORS = [
 ];
 
 const BULLET_COLORS = { green: "#43a047", amber: "#f9a825", red: "#e53935" };
+const AVAIL_BAR_COLORS = { green: "#43a047", amber: "#f9a825", red: "#e53935" };
+const AVAIL_LABELS = { green: "Fully free", amber: "Conflict, but fits", red: "Busy during this time" };
 
 // --- Sub-components ---
 
-function AvailabilityPopover({ option, style }) {
-  const info = getOptionAvailability(option);
+function AvailabilityPopover({ timeslot, style }) {
+  const info = getLocationAvailability(timeslot.date, timeslot.timeStart, timeslot.timeEnd);
   return (
     <div style={{ ...styles.popover, ...style }} onClick={(e) => e.stopPropagation()}>
       <div style={styles.popoverHeader}>
-        <span style={styles.popoverTitle}>{formatDate(option.date)}</span>
+        <span style={styles.popoverTitle}>{formatDate(timeslot.date)}</span>
         <span style={styles.popoverBadge}>
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginRight: 4 }}>
             <circle cx="5" cy="5" r="4" stroke="#4285f4" strokeWidth="1.2"/><path d="M5 3V5.5L6.5 6.5" stroke="#4285f4" strokeWidth="1" strokeLinecap="round"/>
@@ -246,7 +273,7 @@ function AvailabilityPopover({ option, style }) {
         </span>
       </div>
       <div style={styles.popoverWindow}>
-        <span>{option.timeStart} \u2014 {option.timeEnd}</span>
+        <span>{timeslot.timeStart} \u2014 {timeslot.timeEnd}</span>
       </div>
       <ul style={styles.popoverList}>
         {info.items.map((item, i) => (
@@ -260,64 +287,193 @@ function AvailabilityPopover({ option, style }) {
   );
 }
 
-function OptionCard({ option, selection, onSelect, calendarConnected }) {
+function CalendarConnectedIndicator() {
+  return (
+    <div style={styles.calConnected}>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ marginRight: 6, flexShrink: 0 }}>
+        <circle cx="7" cy="7" r="6" stroke="#4285f4" strokeWidth="1.2"/>
+        <path d="M7 4V7.5L9 9" stroke="#4285f4" strokeWidth="1" strokeLinecap="round"/>
+      </svg>
+      <span style={{ color: "#5a6a7a", fontSize: 12 }}>Connected as </span>
+      <span style={{ color: "#3c4043", fontSize: 12, fontWeight: 600 }}>alex.johnson@gmail.com</span>
+    </div>
+  );
+}
+
+function GlobalLocationFilter({ locations, globalExclusions, onToggle }) {
+  return (
+    <div style={styles.globalLocFilter}>
+      <div style={styles.globalLocLabel}>Locations</div>
+      {locations.map((loc) => {
+        const included = !globalExclusions.has(loc.name);
+        return (
+          <button
+            key={loc.name}
+            onClick={() => onToggle(loc.name)}
+            style={styles.globalLocRow}
+          >
+            <CheckboxIcon checked={included} locked={false} />
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: included ? COLORS.text : COLORS.textLight }}>{loc.name}</div>
+              <div style={{ fontSize: 11, color: COLORS.textMuted }}>{loc.address}</div>
+            </div>
+            {!included && (
+              <span style={styles.excludedTag}>Excluded from all</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ExpandedLocationPanel({ timeslot, globalExclusions, perSlotExclusions, onToggleLocation }) {
+  const slotExclusions = perSlotExclusions[timeslot.id] || new Set();
+
+  return (
+    <div style={styles.expandedPanel}>
+      {timeslot.locations.map((loc) => {
+        const isGloballyExcluded = globalExclusions.has(loc.name);
+        const isLocallyExcluded = slotExclusions.has(loc.name);
+        const isIncluded = !isGloballyExcluded && !isLocallyExcluded;
+        const avail = getLocationAvailability(timeslot.date, timeslot.timeStart, timeslot.timeEnd);
+        const availPill = isIncluded ? (
+          avail.level === "green" ? styles.locAvailGreen :
+          avail.level === "amber" ? styles.locAvailAmber : styles.locAvailRed
+        ) : null;
+
+        return (
+          <button
+            key={loc.name}
+            onClick={() => !isGloballyExcluded && onToggleLocation(timeslot.id, loc.name)}
+            style={{
+              ...styles.locRow,
+              ...(isGloballyExcluded ? styles.locRowLocked : {}),
+              ...(isLocallyExcluded ? styles.locRowExcluded : {}),
+              cursor: isGloballyExcluded ? "default" : "pointer",
+            }}
+          >
+            <CheckboxIcon checked={isIncluded || isGloballyExcluded} locked={isGloballyExcluded} />
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: isGloballyExcluded ? "#b0bac5" : isLocallyExcluded ? COLORS.textLight : COLORS.text,
+              }}>
+                {loc.name}
+              </div>
+            </div>
+            {isGloballyExcluded ? (
+              <span style={styles.locLockedLabel}>
+                <LockIconSmall /> Excluded
+              </span>
+            ) : isIncluded ? (
+              <span style={{ ...styles.locAvailPill, ...availPill }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: BULLET_COLORS[avail.level] }} />
+                {AVAIL_LABELS[avail.level]}
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TimeslotRow({
+  timeslot,
+  selection,
+  onSelect,
+  isExpanded,
+  onToggleExpand,
+  globalExclusions,
+  perSlotExclusions,
+  onToggleLocation,
+}) {
   const [showPopover, setShowPopover] = useState(false);
-  const avail = calendarConnected ? getOptionAvailability(option) : null;
+  const avail = getTimeslotAvailability(timeslot, globalExclusions, perSlotExclusions);
+  const includedCount = getIncludedLocationCount(timeslot, globalExclusions, perSlotExclusions);
   const isWorks = selection === "works";
   const isDoesntWork = selection === "doesnt-work";
 
-  const availPillStyle = avail ? (
-    avail.level === "green" ? styles.availPillGreen :
-    avail.level === "amber" ? styles.availPillAmber : styles.availPillRed
-  ) : null;
-
-  const availLabel = avail ? (
-    avail.level === "green" ? "Fully free" :
-    avail.level === "amber" ? "Conflict, but fits" : "Busy during this time"
-  ) : null;
-
   return (
     <div style={{
-      ...styles.optionCard,
-      ...(isWorks ? styles.optionCardWorks : {}),
-      ...(isDoesntWork ? styles.optionCardDoesntWork : {}),
+      ...styles.tsCard,
+      ...(isWorks ? styles.tsCardWorks : {}),
+      ...(isDoesntWork ? styles.tsCardDoesntWork : {}),
     }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ color: "#7a8a9a", marginTop: 2 }}><MapPinIcon /></div>
-        <div style={{ flex: 1 }}>
-          <div style={styles.optionLocName}>{option.locationName}</div>
-          <div style={styles.optionLocAddr}>{option.locationAddr}</div>
-          {avail && (
-            <div style={{ position: "relative", display: "inline-block" }}>
-              <div
-                style={{ ...styles.availPill, ...availPillStyle, cursor: "pointer" }}
+      <div
+        style={styles.tsMainRow}
+        onClick={onToggleExpand}
+      >
+        {/* Availability color bar */}
+        <div style={{ ...styles.tsAvailBar, background: AVAIL_BAR_COLORS[avail.level] }} />
+
+        {/* Date/time info */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={styles.tsDateRow}>
+            <span style={styles.tsDate}>{formatDate(timeslot.date)}</span>
+            <span style={styles.tsDot}>&middot;</span>
+            <span style={styles.tsTime}>{timeslot.timeStart}\u2013{timeslot.timeEnd}</span>
+          </div>
+          <div style={styles.tsLocCountRow}>
+            <span style={styles.tsLocCount}>{includedCount} location{includedCount !== 1 ? "s" : ""}</span>
+            <div style={{ position: "relative", display: "inline-flex" }}>
+              <span
+                style={{ ...styles.tsAvailLabel, color: BULLET_COLORS[avail.level] }}
                 onMouseEnter={() => setShowPopover(true)}
                 onMouseLeave={() => setShowPopover(false)}
               >
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: BULLET_COLORS[avail.level] }} />
-                {availLabel}
-              </div>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: BULLET_COLORS[avail.level] }} />
+                {AVAIL_LABELS[avail.level]}
+              </span>
               {showPopover && (
-                <AvailabilityPopover option={option} style={{ position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 100 }} />
+                <AvailabilityPopover timeslot={timeslot} style={{ position: "absolute", top: "100%", left: 0, marginTop: 6, zIndex: 100 }} />
               )}
             </div>
-          )}
+          </div>
         </div>
+
+        {/* Toggle buttons */}
+        <div style={styles.tsToggles} onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => onSelect(timeslot.id, isWorks ? null : "works")}
+            style={{ ...styles.tsToggleBtn, ...(isWorks ? styles.tsToggleBtnWorks : {}) }}
+            title="Works for me"
+          >
+            <CheckIcon />
+          </button>
+          <button
+            onClick={() => onSelect(timeslot.id, isDoesntWork ? null : "doesnt-work")}
+            style={{ ...styles.tsToggleBtn, ...(isDoesntWork ? styles.tsToggleBtnDoesntWork : {}) }}
+            title="Doesn't work"
+          >
+            <XIcon />
+          </button>
+        </div>
+
+        {/* Expand chevron */}
+        <ChevronDown
+          size={18}
+          style={{
+            color: COLORS.textLight,
+            transition: "transform 0.2s",
+            transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+            flexShrink: 0,
+            marginLeft: 4,
+          }}
+        />
       </div>
-      <div style={styles.toggleRow}>
-        <button
-          onClick={() => onSelect(option.id, isWorks ? null : "works")}
-          style={{ ...styles.toggleBtn, ...(isWorks ? styles.toggleBtnWorks : {}) }}
-        >
-          <CheckIcon /> Works
-        </button>
-        <button
-          onClick={() => onSelect(option.id, isDoesntWork ? null : "doesnt-work")}
-          style={{ ...styles.toggleBtn, ...(isDoesntWork ? styles.toggleBtnDoesntWork : {}) }}
-        >
-          <XIcon /> Doesn't work
-        </button>
-      </div>
+
+      {/* Expanded location panel */}
+      {isExpanded && (
+        <ExpandedLocationPanel
+          timeslot={timeslot}
+          globalExclusions={globalExclusions}
+          perSlotExclusions={perSlotExclusions}
+          onToggleLocation={onToggleLocation}
+        />
+      )}
     </div>
   );
 }
@@ -325,49 +481,51 @@ function OptionCard({ option, selection, onSelect, calendarConnected }) {
 // --- Main component ---
 export default function InviteeExperience({ onBack }) {
   const [screen, setScreen] = useState(1);
-  const [calendarConnected, setCalendarConnected] = useState(false);
-  const [calendarSkipped, setCalendarSkipped] = useState(false);
-  const [calendarLoading, setCalendarLoading] = useState(false);
-  const [selections, setSelections] = useState({});
+  const [timeslotSelections, setTimeslotSelections] = useState({});
+  const [globalLocationExclusions, setGlobalLocationExclusions] = useState(new Set());
+  const [locationExclusions, setLocationExclusions] = useState({}); // { tsId: Set<locName> }
+  const [expandedTimeslot, setExpandedTimeslot] = useState(null);
   const [rankings, setRankings] = useState([null, null, null]);
   const [expirationDate, setExpirationDate] = useState(getDefaultExpiration());
   const [notes, setNotes] = useState("");
 
-  const worksOptions = MOCK_OPTIONS.filter(opt => selections[opt.id] === "works");
-  const worksCount = worksOptions.length;
-  const doesntWorkCount = Object.values(selections).filter(v => v === "doesnt-work").length;
+  const worksTimeslots = TIMESLOTS.filter(ts => timeslotSelections[ts.id] === "works");
+  const worksCount = worksTimeslots.length;
+  const doesntWorkCount = Object.values(timeslotSelections).filter(v => v === "doesnt-work").length;
 
-  // Group options by date
-  const optionsByDate = {};
-  for (const opt of MOCK_OPTIONS) {
-    if (!optionsByDate[opt.date]) optionsByDate[opt.date] = [];
-    optionsByDate[opt.date].push(opt);
-  }
-  const sortedDates = Object.keys(optionsByDate).sort();
-
-  // Adapt rank slot count to available options
   const maxRanks = Math.min(3, worksCount);
 
   // Clear invalid rankings when works selections change
   useEffect(() => {
-    const worksIds = new Set(worksOptions.map(o => o.id));
+    const worksIds = new Set(worksTimeslots.map(ts => ts.id));
     setRankings(prev => prev.map(id => (id && !worksIds.has(id)) ? null : id));
   }, [worksCount]);
 
-  const handleSelect = (optionId, value) => {
-    setSelections(prev => ({ ...prev, [optionId]: value }));
+  const handleTimeslotSelect = (tsId, value) => {
+    setTimeslotSelections(prev => ({ ...prev, [tsId]: value }));
   };
 
-  const handleConnectGoogle = () => {
-    setCalendarLoading(true);
-    setTimeout(() => {
-      setCalendarConnected(true);
-      setCalendarLoading(false);
-    }, 800);
+  const handleGlobalLocationToggle = (locName) => {
+    setGlobalLocationExclusions(prev => {
+      const next = new Set(prev);
+      if (next.has(locName)) next.delete(locName);
+      else next.add(locName);
+      return next;
+    });
   };
 
-  const handleRankToggle = (optionId) => {
-    const currentIndex = rankings.indexOf(optionId);
+  const handlePerSlotLocationToggle = (tsId, locName) => {
+    setLocationExclusions(prev => {
+      const current = prev[tsId] || new Set();
+      const next = new Set(current);
+      if (next.has(locName)) next.delete(locName);
+      else next.add(locName);
+      return { ...prev, [tsId]: next };
+    });
+  };
+
+  const handleRankToggle = (tsId) => {
+    const currentIndex = rankings.indexOf(tsId);
     if (currentIndex !== -1) {
       const next = [...rankings];
       next[currentIndex] = null;
@@ -376,7 +534,7 @@ export default function InviteeExperience({ onBack }) {
       const emptyIndex = rankings.findIndex((r, i) => r === null && i < maxRanks);
       if (emptyIndex !== -1) {
         const next = [...rankings];
-        next[emptyIndex] = optionId;
+        next[emptyIndex] = tsId;
         setRankings(next);
       }
     }
@@ -391,10 +549,9 @@ export default function InviteeExperience({ onBack }) {
   const filledRanks = rankings.filter(Boolean).length;
   const canContinue = worksCount >= 1;
   const canSubmit = filledRanks >= 1;
-
   const quorumProgress = MOCK_GATHERING.responsesReceived / MOCK_GATHERING.quorum;
 
-  // --- Confirmation state ---
+  // --- Confirmation screen ---
   if (screen === 3) {
     return (
       <div style={styles.container}>
@@ -408,7 +565,7 @@ export default function InviteeExperience({ onBack }) {
             </div>
             <h2 style={styles.confirmTitle}>Response Submitted!</h2>
             <p style={styles.confirmSub}>
-              You ranked <strong>{filledRanks} preference{filledRanks !== 1 ? "s" : ""}</strong> from {worksCount} available option{worksCount !== 1 ? "s" : ""}.
+              You ranked <strong>{filledRanks} timeslot preference{filledRanks !== 1 ? "s" : ""}</strong> from {worksCount} available slot{worksCount !== 1 ? "s" : ""}.
               {expirationDate && <><br/>Your availability expires <strong>{new Date(expirationDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</strong>.</>}
             </p>
             <div style={styles.confirmStats}>
@@ -421,8 +578,8 @@ export default function InviteeExperience({ onBack }) {
                 <span style={styles.confirmStatLabel}>Your #1 pick</span>
                 <span style={{ ...styles.confirmStatValue, fontSize: 14 }}>
                   {rankings[0] ? (() => {
-                    const opt = MOCK_OPTIONS.find(o => o.id === rankings[0]);
-                    return opt ? `${formatDate(opt.date)}, ${opt.locationName.split(" \u2014 ")[0]}` : "";
+                    const ts = TIMESLOTS.find(t => t.id === rankings[0]);
+                    return ts ? `${formatDate(ts.date)}, ${ts.timeStart}\u2013${ts.timeEnd}` : "";
                   })() : "\u2014"}
                 </span>
               </div>
@@ -432,7 +589,16 @@ export default function InviteeExperience({ onBack }) {
             </p>
             <button
               style={{ ...styles.primaryBtn, marginTop: 24, maxWidth: 240 }}
-              onClick={() => { setScreen(1); setSelections({}); setRankings([null, null, null]); setExpirationDate(getDefaultExpiration()); setNotes(""); }}
+              onClick={() => {
+                setScreen(1);
+                setTimeslotSelections({});
+                setGlobalLocationExclusions(new Set());
+                setLocationExclusions({});
+                setExpandedTimeslot(null);
+                setRankings([null, null, null]);
+                setExpirationDate(getDefaultExpiration());
+                setNotes("");
+              }}
             >
               Start Over
             </button>
@@ -495,69 +661,41 @@ export default function InviteeExperience({ onBack }) {
                 <div style={{ ...styles.quorumBarFill, width: `${Math.min(100, quorumProgress * 100)}%` }} />
               </div>
             </div>
+
+            {/* Global Location Filter — under gathering info */}
+            {screen === 1 && (
+              <GlobalLocationFilter
+                locations={ALL_LOCATIONS}
+                globalExclusions={globalLocationExclusions}
+                onToggle={handleGlobalLocationToggle}
+              />
+            )}
           </div>
+
+          {/* Calendar connected indicator */}
+          {screen === 1 && <CalendarConnectedIndicator />}
 
           {/* Screen 1: Selection */}
           {screen === 1 && (
             <div>
-              {/* Google Calendar section */}
-              {!calendarSkipped && !calendarConnected && (
-                <div style={styles.calSection}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
-                    <GoogleIcon />
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.text, marginBottom: 2 }}>Connect your calendar</div>
-                      <div style={{ fontSize: 13, color: COLORS.textMuted, lineHeight: 1.4 }}>See your availability against each option to make better decisions.</div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                    <button onClick={handleConnectGoogle} style={styles.googleBtn} disabled={calendarLoading}>
-                      <GoogleIcon />
-                      {calendarLoading ? "Connecting..." : "Sign in with Google"}
-                    </button>
-                    <button onClick={() => setCalendarSkipped(true)} style={styles.skipBtn}>Skip for now</button>
-                  </div>
-                </div>
-              )}
-
-              {calendarConnected && (
-                <div style={styles.calSectionConnected}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#43a047", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <CheckIcon />
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "#2e7d32" }}>Connected as alex.johnson@gmail.com</span>
-                    </div>
-                    <button onClick={() => { setCalendarConnected(false); setCalendarSkipped(true); }} style={{ ...styles.skipBtn, color: "#5a6a7a", textDecoration: "none", fontSize: 12 }}>Disconnect</button>
-                  </div>
-                </div>
-              )}
-
               <h3 style={styles.screenTitle}>What works for you?</h3>
-              <p style={styles.screenDesc}>Review each option and mark whether it works for your schedule.</p>
+              <p style={styles.screenDesc}>Review each timeslot and expand to see location details.</p>
 
-              {sortedDates.map((date, dateIdx) => {
-                const opts = optionsByDate[date];
-                const accent = ["#2e86c1", "#e67e22", "#8e44ad", "#43a047"][dateIdx % 4];
-                return (
-                  <div key={date} style={{ marginBottom: 20 }}>
-                    <div style={{ ...styles.dateGroupHeader, borderLeft: `3px solid ${accent}`, paddingLeft: 12 }}>
-                      <span style={styles.dateLabel}>{formatDate(date)}</span>
-                      <span style={styles.dateTime}>{opts[0].timeStart} \u2013 {opts[0].timeEnd}</span>
-                    </div>
-                    {opts.map(opt => (
-                      <OptionCard
-                        key={opt.id}
-                        option={opt}
-                        selection={selections[opt.id] || null}
-                        onSelect={handleSelect}
-                        calendarConnected={calendarConnected}
-                      />
-                    ))}
-                  </div>
-                );
-              })}
+              <div style={styles.tsListWrap}>
+                {TIMESLOTS.map((ts) => (
+                  <TimeslotRow
+                    key={ts.id}
+                    timeslot={ts}
+                    selection={timeslotSelections[ts.id] || null}
+                    onSelect={handleTimeslotSelect}
+                    isExpanded={expandedTimeslot === ts.id}
+                    onToggleExpand={() => setExpandedTimeslot(expandedTimeslot === ts.id ? null : ts.id)}
+                    globalExclusions={globalLocationExclusions}
+                    perSlotExclusions={locationExclusions}
+                    onToggleLocation={handlePerSlotLocationToggle}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
@@ -565,28 +703,30 @@ export default function InviteeExperience({ onBack }) {
           {screen === 2 && (
             <div>
               <h3 style={styles.screenTitle}>Rank your preferences</h3>
-              <p style={styles.screenDesc}>Tap options to assign your top {maxRanks > 1 ? maxRanks : ""} choice{maxRanks !== 1 ? "s" : ""}.</p>
+              <p style={styles.screenDesc}>Tap timeslots to assign your top {maxRanks > 1 ? maxRanks : ""} choice{maxRanks !== 1 ? "s" : ""}.</p>
 
               {/* Rank slots */}
               <div style={styles.rankSlotsRow}>
                 {Array.from({ length: maxRanks }).map((_, i) => {
-                  const optId = rankings[i];
-                  const opt = optId ? MOCK_OPTIONS.find(o => o.id === optId) : null;
+                  const tsId = rankings[i];
+                  const ts = tsId ? TIMESLOTS.find(t => t.id === tsId) : null;
                   const rc = RANK_COLORS[i];
+                  const includedCount = ts ? getIncludedLocationCount(ts, globalLocationExclusions, locationExclusions) : 0;
                   return (
                     <div
                       key={i}
-                      onClick={() => optId && handleUnassignSlot(i)}
+                      onClick={() => tsId && handleUnassignSlot(i)}
                       style={{
                         ...styles.rankSlot,
-                        ...(opt ? { ...styles.rankSlotFilled, borderColor: rc.border, background: rc.bg, cursor: "pointer" } : {}),
+                        ...(ts ? { ...styles.rankSlotFilled, borderColor: rc.border, background: rc.bg, cursor: "pointer" } : {}),
                       }}
                     >
                       <div style={{ ...styles.rankSlotLabel, color: rc.badge }}>{rc.label}</div>
-                      {opt ? (
+                      {ts ? (
                         <div style={styles.rankSlotContent}>
-                          <div>{formatDate(opt.date)}</div>
-                          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>{opt.locationName.split(" \u2014 ")[0]}</div>
+                          <div>{formatDate(ts.date)}</div>
+                          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>{ts.timeStart}\u2013{ts.timeEnd}</div>
+                          <div style={{ fontSize: 10, color: COLORS.textLight, marginTop: 2 }}>{includedCount} location{includedCount !== 1 ? "s" : ""}</div>
                         </div>
                       ) : (
                         <div style={styles.rankSlotEmpty}>Tap below</div>
@@ -596,17 +736,21 @@ export default function InviteeExperience({ onBack }) {
                 })}
               </div>
 
-              {/* Rankable options */}
+              {/* Rankable timeslots */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {worksOptions.map(opt => {
-                  const rankIndex = rankings.indexOf(opt.id);
+                {worksTimeslots.map(ts => {
+                  const rankIndex = rankings.indexOf(ts.id);
                   const isRanked = rankIndex !== -1;
                   const allSlotsFull = rankings.slice(0, maxRanks).every(Boolean);
                   const rc = isRanked ? RANK_COLORS[rankIndex] : null;
+                  const includedCount = getIncludedLocationCount(ts, globalLocationExclusions, locationExclusions);
+                  const includedLocs = ts.locations.filter(loc =>
+                    !globalLocationExclusions.has(loc.name) && !(locationExclusions[ts.id] || new Set()).has(loc.name)
+                  );
                   return (
                     <button
-                      key={opt.id}
-                      onClick={() => handleRankToggle(opt.id)}
+                      key={ts.id}
+                      onClick={() => handleRankToggle(ts.id)}
                       style={{
                         ...styles.rankOptionCard,
                         ...(isRanked ? { borderColor: rc.border, background: rc.bg } : {}),
@@ -618,9 +762,12 @@ export default function InviteeExperience({ onBack }) {
                       )}
                       <div style={{ flex: 1, textAlign: "left" }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.text }}>
-                          {formatDate(opt.date)} &middot; {opt.timeStart} \u2013 {opt.timeEnd}
+                          {formatDate(ts.date)} &middot; {ts.timeStart}\u2013{ts.timeEnd}
                         </div>
-                        <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 2 }}>{opt.locationName}</div>
+                        <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 2 }}>
+                          {includedLocs.map(l => l.name.split(" \u2014 ")[0]).join(", ")}
+                          {includedCount === 0 && <span style={{ color: "#e53935" }}>No locations</span>}
+                        </div>
                       </div>
                       {isRanked && (
                         <div style={{ color: COLORS.textLight, fontSize: 11 }}>tap to remove</div>
@@ -688,7 +835,7 @@ export default function InviteeExperience({ onBack }) {
               {worksCount > 0 && <span style={{ color: "#43a047", fontWeight: 600 }}>{worksCount} work{worksCount !== 1 ? "" : "s"}</span>}
               {doesntWorkCount > 0 && <span style={{ color: "#e53935", fontWeight: 600 }}>{doesntWorkCount} don't work</span>}
             </div>
-            <span style={{ fontSize: 12, color: COLORS.textLight }}>{MOCK_OPTIONS.length - worksCount - doesntWorkCount} remaining</span>
+            <span style={{ fontSize: 12, color: COLORS.textLight }}>{TIMESLOTS.length - worksCount - doesntWorkCount} remaining</span>
           </div>
         )}
       </div>
@@ -721,7 +868,7 @@ const styles = {
   stepContent: { padding: "24px 32px", minHeight: 300 },
 
   // Gathering info
-  gatheringInfo: { padding: "16px 20px", background: "#f5f7fa", borderRadius: 14, marginBottom: 20 },
+  gatheringInfo: { padding: "16px 20px", background: "#f5f7fa", borderRadius: 14, marginBottom: 16 },
   gatheringTitle: { fontSize: 17, fontWeight: 700, color: COLORS.text, margin: "0 0 8px", letterSpacing: -0.2 },
   gatheringMeta: { display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13, color: "#5a6a7a", marginBottom: 12 },
   gatheringMetaItem: { display: "flex", alignItems: "center", gap: 5 },
@@ -730,33 +877,85 @@ const styles = {
   quorumBar: { flex: 1, height: 4, borderRadius: 2, background: "#e0e5eb", overflow: "hidden" },
   quorumBarFill: { height: "100%", borderRadius: 2, background: COLORS.blueLight, transition: "width 0.3s" },
 
-  // Google Calendar
-  calSection: { padding: "16px 18px", borderRadius: 14, border: `1.5px solid ${COLORS.borderLight}`, background: COLORS.fieldBg, marginBottom: 20 },
-  calSectionConnected: { padding: "12px 18px", borderRadius: 14, border: "1.5px solid #a5d6a7", background: "#e8f5e9", marginBottom: 20 },
-  googleBtn: { display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 20px", borderRadius: 10, border: "1.5px solid #dadce0", background: "#fff", fontSize: 14, fontWeight: 500, color: "#3c4043", cursor: "pointer", fontFamily: FONTS.base, transition: "all 0.2s" },
-  skipBtn: { background: "none", border: "none", fontSize: 13, color: COLORS.textMuted, cursor: "pointer", fontFamily: FONTS.base, textDecoration: "underline" },
+  // Global location filter
+  globalLocFilter: { marginTop: 14, paddingTop: 12, borderTop: "1px solid #e0e5eb" },
+  globalLocLabel: { fontSize: 12, fontWeight: 600, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 },
+  globalLocRow: {
+    display: "flex", alignItems: "center", gap: 10, width: "100%",
+    padding: "8px 10px", borderRadius: 10, border: "none",
+    background: "transparent", cursor: "pointer", fontFamily: FONTS.base,
+    transition: "background 0.15s",
+  },
+  excludedTag: { fontSize: 11, color: "#e53935", fontWeight: 600, padding: "2px 8px", background: "#ffebee", borderRadius: 6 },
+
+  // Calendar connected
+  calConnected: { display: "flex", alignItems: "center", padding: "8px 0", marginBottom: 12 },
 
   // Screen titles
   screenTitle: { fontSize: 17, fontWeight: 700, color: COLORS.text, margin: "0 0 6px", letterSpacing: -0.2 },
   screenDesc: { fontSize: 14, color: COLORS.textMuted, margin: "0 0 16px", lineHeight: 1.5 },
 
-  // Date groups
-  dateGroupHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0 8px 0", marginBottom: 8 },
-  dateLabel: { fontSize: 14, fontWeight: 700, color: COLORS.text },
-  dateTime: { fontSize: 13, color: COLORS.textMuted, fontWeight: 500 },
+  // Timeslot list
+  tsListWrap: { display: "flex", flexDirection: "column", gap: 10 },
 
-  // Option cards
-  optionCard: { padding: "14px 16px", borderRadius: 12, border: `1.5px solid ${COLORS.borderLight}`, background: "#fff", marginBottom: 8, transition: "all 0.2s" },
-  optionCardWorks: { borderColor: "#a5d6a7", background: "#f1f8e9" },
-  optionCardDoesntWork: { borderColor: "#ffcdd2", background: "#fff5f5", opacity: 0.65 },
-  optionLocName: { fontSize: 14, fontWeight: 600, color: COLORS.text, marginBottom: 2 },
-  optionLocAddr: { fontSize: 12, color: COLORS.textMuted, marginBottom: 6 },
+  // Timeslot card
+  tsCard: {
+    borderRadius: 14, border: `1.5px solid ${COLORS.borderLight}`, background: "#fff",
+    overflow: "hidden", transition: "all 0.2s",
+  },
+  tsCardWorks: { borderColor: "#a5d6a7", background: "#f1f8e9" },
+  tsCardDoesntWork: { borderColor: "#ffcdd2", background: "#fff5f5", opacity: 0.65 },
+  tsMainRow: {
+    display: "flex", alignItems: "center", gap: 12,
+    padding: "14px 16px", cursor: "pointer", userSelect: "none",
+  },
+  tsAvailBar: { width: 4, height: 36, borderRadius: 2, flexShrink: 0 },
+  tsDateRow: { display: "flex", alignItems: "center", gap: 6, marginBottom: 3 },
+  tsDate: { fontSize: 14, fontWeight: 700, color: COLORS.text },
+  tsDot: { fontSize: 14, color: COLORS.textLight },
+  tsTime: { fontSize: 13, fontWeight: 500, color: COLORS.textMuted },
+  tsLocCountRow: { display: "flex", alignItems: "center", gap: 10 },
+  tsLocCount: { fontSize: 12, color: COLORS.textMuted },
+  tsAvailLabel: {
+    display: "inline-flex", alignItems: "center", gap: 4,
+    fontSize: 11, fontWeight: 600, cursor: "pointer",
+  },
+  tsToggles: { display: "flex", gap: 6, flexShrink: 0 },
+  tsToggleBtn: {
+    width: 36, height: 36, borderRadius: 10,
+    border: `1.5px solid ${COLORS.border}`, background: COLORS.fieldBg,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    color: "#7a8a9a", cursor: "pointer", transition: "all 0.2s",
+    fontFamily: FONTS.base, padding: 0,
+  },
+  tsToggleBtnWorks: { borderColor: "#43a047", background: "#43a047", color: "#fff" },
+  tsToggleBtnDoesntWork: { borderColor: "#e53935", background: "#e53935", color: "#fff" },
 
-  // Availability pill
-  availPill: { display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, marginBottom: 8 },
-  availPillGreen: { background: "#e8f5e9", color: "#2e7d32" },
-  availPillAmber: { background: "#fff8e1", color: "#f57f17" },
-  availPillRed: { background: "#ffebee", color: "#c62828" },
+  // Expanded location panel
+  expandedPanel: {
+    borderTop: `1px solid ${COLORS.borderLight}`,
+    padding: "8px 16px 12px 28px",
+    background: "#fafbfc",
+  },
+  locRow: {
+    display: "flex", alignItems: "center", gap: 10, width: "100%",
+    padding: "8px 10px", borderRadius: 10, border: "none",
+    background: "transparent", fontFamily: FONTS.base,
+    transition: "background 0.15s",
+  },
+  locRowLocked: { opacity: 0.55 },
+  locRowExcluded: { opacity: 0.7 },
+  locAvailPill: {
+    display: "inline-flex", alignItems: "center", gap: 4,
+    padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+  },
+  locAvailGreen: { background: "#e8f5e9", color: "#2e7d32" },
+  locAvailAmber: { background: "#fff8e1", color: "#f57f17" },
+  locAvailRed: { background: "#ffebee", color: "#c62828" },
+  locLockedLabel: {
+    display: "inline-flex", alignItems: "center", gap: 4,
+    fontSize: 11, fontWeight: 600, color: "#b0bac5",
+  },
 
   // Popover
   popover: { width: 260, background: "#fff", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06)", padding: 0, overflow: "hidden", cursor: "default" },
@@ -768,12 +967,6 @@ const styles = {
   popoverListItem: { display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: COLORS.text, lineHeight: 1.3 },
   popoverBullet: { width: 8, height: 8, borderRadius: "50%", flexShrink: 0 },
   popoverItemText: { fontSize: 11, color: "#4a5568" },
-
-  // Toggle buttons
-  toggleRow: { display: "flex", gap: 8, marginTop: 10 },
-  toggleBtn: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 14px", borderRadius: 10, border: `1.5px solid ${COLORS.border}`, background: COLORS.fieldBg, fontSize: 13, fontWeight: 600, color: "#4a5568", cursor: "pointer", fontFamily: FONTS.base, transition: "all 0.2s" },
-  toggleBtnWorks: { borderColor: "#43a047", background: "#43a047", color: "#fff" },
-  toggleBtnDoesntWork: { borderColor: "#e53935", background: "#e53935", color: "#fff" },
 
   // Selection footer
   selectionFooter: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 32px 16px", borderTop: "1px solid #f0f0f0", background: "#f9fafb" },
