@@ -60,12 +60,20 @@ const TIMESLOT_COMMITMENTS = {
 };
 
 // --- Availability windows the host scheduled within ---
-// The host used these windows and then positioned the gathering (timeStart/timeEnd) within them
+// The host used these windows, applied their commute buffer, and positioned the gathering within.
+// hostCommuteBuffer = the host's commute in minutes (we don't reveal this to invitee,
+// but it narrows the effective window they see)
 const TIMESLOT_WINDOWS = {
-  "ts-1": { windowStart: "8:00 AM", windowEnd: "2:00 PM" },   // Host placed 9–11 AM
-  "ts-2": { windowStart: "8:00 AM", windowEnd: "2:00 PM" },   // Host placed 9–11 AM
-  "ts-3": { windowStart: "12:00 PM", windowEnd: "6:00 PM" },  // Host placed 2–4 PM
-  "ts-4": { windowStart: "12:00 PM", windowEnd: "6:00 PM" },  // Host placed 2–4 PM
+  "ts-1": { windowStart: "8:00 AM", windowEnd: "2:00 PM", hostCommuteBuffer: 30 },   // Effective: 8:30 AM–1:30 PM, host placed 9–11 AM
+  "ts-2": { windowStart: "8:00 AM", windowEnd: "2:00 PM", hostCommuteBuffer: 30 },
+  "ts-3": { windowStart: "12:00 PM", windowEnd: "6:00 PM", hostCommuteBuffer: 20 },  // Effective: 12:20 PM–5:40 PM, host placed 2–4 PM
+  "ts-4": { windowStart: "12:00 PM", windowEnd: "6:00 PM", hostCommuteBuffer: 20 },
+};
+
+// --- Invitee commute defaults (mock "remembered" from previous events) ---
+const INVITEE_COMMUTE_DEFAULTS = {
+  "Community Center \u2014 Room A": 25,
+  "Downtown Library \u2014 Meeting Room 3": 15,
 };
 
 // --- Deterministic Mock Calendar Events Per Date ---
@@ -288,6 +296,14 @@ const PeopleSmallIcon = () => (
   </svg>
 );
 
+const DirectionsIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+    <path d="M6.7 1.3L10.7 5.3C11.1 5.7 11.1 6.3 10.7 6.7L6.7 10.7C6.3 11.1 5.7 11.1 5.3 10.7L1.3 6.7C0.9 6.3 0.9 5.7 1.3 5.3L5.3 1.3C5.7 0.9 6.3 0.9 6.7 1.3Z" stroke="currentColor" strokeWidth="1.1"/>
+    <path d="M4.5 6.5L6 5L7.5 6.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M6 5V8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+  </svg>
+);
+
 const CommuteIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
     <path d="M2.5 9.5H11.5V7L10 4H4L2.5 7V9.5Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
@@ -379,7 +395,55 @@ function GlobalLocationFilter({ locations, globalExclusions, onToggle }) {
   );
 }
 
-function ExpandedLocationPanel({ timeslot, globalExclusions, perSlotExclusions, onToggleLocation }) {
+function InlineCommuteInput({ locName, value, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const [editVal, setEditVal] = useState(value);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) inputRef.current.focus();
+  }, [editing]);
+
+  const commit = () => {
+    const n = parseInt(editVal);
+    onChange(locName, isNaN(n) || n < 0 ? 0 : Math.min(n, 180));
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div style={styles.locCommuteRow} onClick={(e) => e.stopPropagation()}>
+        <CommuteIcon />
+        <input
+          ref={inputRef}
+          type="number"
+          value={editVal}
+          onChange={(e) => setEditVal(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
+          style={styles.locCommuteInput}
+          min={0}
+          max={180}
+          step={5}
+        />
+        <span style={styles.locCommuteUnit}>min</span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{ ...styles.locCommuteRow, cursor: "pointer" }}
+      onClick={(e) => { e.stopPropagation(); setEditVal(value); setEditing(true); }}
+    >
+      <CommuteIcon />
+      <span style={styles.locCommuteValue}>{value}</span>
+      <span style={styles.locCommuteUnit}>min</span>
+    </div>
+  );
+}
+
+function ExpandedLocationPanel({ timeslot, globalExclusions, perSlotExclusions, onToggleLocation, inviteeCommutes, onCommuteChange }) {
   const slotExclusions = perSlotExclusions[timeslot.id] || new Set();
 
   return (
@@ -393,46 +457,70 @@ function ExpandedLocationPanel({ timeslot, globalExclusions, perSlotExclusions, 
           avail.level === "green" ? styles.locAvailGreen :
           avail.level === "amber" ? styles.locAvailAmber : styles.locAvailRed
         ) : null;
+        const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(loc.address)}`;
 
         return (
-          <button
-            key={loc.name}
-            onClick={() => !isGloballyExcluded && onToggleLocation(timeslot.id, loc.name)}
-            style={{
-              ...styles.locRow,
-              ...(isGloballyExcluded ? styles.locRowLocked : {}),
-              ...(isLocallyExcluded ? styles.locRowExcluded : {}),
-              cursor: isGloballyExcluded ? "default" : "pointer",
-            }}
-          >
-            <CheckboxIcon checked={isIncluded || isGloballyExcluded} locked={isGloballyExcluded} />
-            <div style={{ flex: 1, textAlign: "left" }}>
-              <div style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: isGloballyExcluded ? "#b0bac5" : isLocallyExcluded ? COLORS.textLight : COLORS.text,
-              }}>
-                {loc.name}
+          <div key={loc.name} style={styles.locCard}>
+            <button
+              onClick={() => !isGloballyExcluded && onToggleLocation(timeslot.id, loc.name)}
+              style={{
+                ...styles.locRow,
+                ...(isGloballyExcluded ? styles.locRowLocked : {}),
+                ...(isLocallyExcluded ? styles.locRowExcluded : {}),
+                cursor: isGloballyExcluded ? "default" : "pointer",
+              }}
+            >
+              <CheckboxIcon checked={isIncluded || isGloballyExcluded} locked={isGloballyExcluded} />
+              <div style={{ flex: 1, textAlign: "left" }}>
+                <div style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: isGloballyExcluded ? "#b0bac5" : isLocallyExcluded ? COLORS.textLight : COLORS.text,
+                }}>
+                  {loc.name}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                  <span style={{ fontSize: 11, color: COLORS.textMuted }}>{loc.address}</span>
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    style={styles.locDirectionsLink}
+                  >
+                    <DirectionsIcon /> Directions
+                  </a>
+                </div>
               </div>
-            </div>
-            {isGloballyExcluded ? (
-              <span style={styles.locLockedLabel}>
-                <LockIconSmall /> Excluded
-              </span>
-            ) : isIncluded ? (
-              <span style={{ ...styles.locAvailPill, ...availPill }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: BULLET_COLORS[avail.level] }} />
-                {AVAIL_LABELS[avail.level]}
-              </span>
-            ) : null}
-          </button>
+              {isGloballyExcluded ? (
+                <span style={styles.locLockedLabel}>
+                  <LockIconSmall /> Excluded
+                </span>
+              ) : isIncluded ? (
+                <span style={{ ...styles.locAvailPill, ...availPill }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: BULLET_COLORS[avail.level] }} />
+                  {AVAIL_LABELS[avail.level]}
+                </span>
+              ) : null}
+            </button>
+            {/* Per-location commute input */}
+            {!isGloballyExcluded && isIncluded && (
+              <div style={styles.locCommuteWrap}>
+                <InlineCommuteInput
+                  locName={loc.name}
+                  value={inviteeCommutes[loc.name] || 0}
+                  onChange={onCommuteChange}
+                />
+              </div>
+            )}
+          </div>
         );
       })}
     </div>
   );
 }
 
-function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChange }) {
+function InviteeTimeline({ timeslot, inviteeCommuteMins, adjustedStart, onPositionChange }) {
   const barRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [barWidth, setBarWidth] = useState(400);
@@ -441,16 +529,19 @@ function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChang
   const win = TIMESLOT_WINDOWS[timeslot.id];
   if (!win) return null;
 
-  const windowStartHr = parseTimeToHour(win.windowStart);
-  const windowEndHr = parseTimeToHour(win.windowEnd);
-  const windowHrs = windowEndHr - windowStartHr;
+  // Effective window = host's window narrowed by host's commute buffer
+  const hostCommuteHrs = (win.hostCommuteBuffer || 0) / 60;
+  const effectiveStartHr = parseTimeToHour(win.windowStart) + hostCommuteHrs;
+  const effectiveEndHr = parseTimeToHour(win.windowEnd) - hostCommuteHrs;
+  const effectiveHrs = effectiveEndHr - effectiveStartHr;
   const durationHrs = MOCK_GATHERING.duration / 60;
-  const commuteHrs = commuteMins / 60;
+  const commuteHrs = inviteeCommuteMins / 60;
   const hostSuggestedStart = parseTimeToHour(timeslot.timeStart);
 
-  const minStart = windowStartHr + commuteHrs;
-  const maxStart = windowEndHr - durationHrs - commuteHrs;
-  const fits = durationHrs + commuteHrs * 2 <= windowHrs + 0.01;
+  // Invitee drag bounds: within effective window, further constrained by their commute
+  const minStart = effectiveStartHr + commuteHrs;
+  const maxStart = effectiveEndHr - durationHrs - commuteHrs;
+  const fits = durationHrs + commuteHrs * 2 <= effectiveHrs + 0.01;
 
   const currentStart = adjustedStart != null
     ? Math.max(minStart, Math.min(maxStart, adjustedStart))
@@ -458,11 +549,11 @@ function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChang
 
   const isAdjusted = adjustedStart != null && Math.abs(currentStart - hostSuggestedStart) > 0.08;
 
-  const toPercent = (h) => ((h - windowStartHr) / windowHrs) * 100;
+  const toPercent = (h) => ((h - effectiveStartHr) / effectiveHrs) * 100;
 
-  // Calendar events for this date
+  // Calendar events for this date (within effective window)
   const calEvents = (DETERMINISTIC_EVENTS[timeslot.date] || []).filter(
-    ev => ev.end > windowStartHr && ev.start < windowEndHr
+    ev => ev.end > effectiveStartHr && ev.start < effectiveEndHr
   );
 
   // Measure bar
@@ -505,7 +596,7 @@ function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChang
     return (
       <div style={styles.invTimelineWrap}>
         <div style={styles.invTimelineWarning}>
-          Commute ({commuteMins} min each way) doesn't fit within this window.
+          Your commute ({inviteeCommuteMins} min each way) doesn't fit within this window.
         </div>
       </div>
     );
@@ -529,13 +620,13 @@ function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChang
       <div ref={barRef} style={styles.invTimelineBar}>
         {/* Calendar event overlays */}
         {calEvents.map((ev, i) => {
-          const evS = Math.max(ev.start, windowStartHr);
-          const evE = Math.min(ev.end, windowEndHr);
+          const evS = Math.max(ev.start, effectiveStartHr);
+          const evE = Math.min(ev.end, effectiveEndHr);
           return (
             <div key={i} title={ev.title} style={{
               position: "absolute",
               left: `${toPercent(evS)}%`,
-              width: `${((evE - evS) / windowHrs) * 100}%`,
+              width: `${((evE - evS) / effectiveHrs) * 100}%`,
               top: 0, bottom: 0,
               background: ev.color || "#e53935",
               opacity: 0.15,
@@ -549,7 +640,7 @@ function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChang
           <div style={{
             position: "absolute",
             left: `${toPercent(hostSuggestedStart)}%`,
-            width: `${(durationHrs / windowHrs) * 100}%`,
+            width: `${(durationHrs / effectiveHrs) * 100}%`,
             top: 4, bottom: 4,
             border: "2px dashed #b0bac5",
             borderRadius: 6,
@@ -562,7 +653,7 @@ function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChang
           <div style={{
             position: "absolute",
             left: `${toPercent(currentStart - commuteHrs)}%`,
-            width: `${(commuteHrs / windowHrs) * 100}%`,
+            width: `${(commuteHrs / effectiveHrs) * 100}%`,
             top: 0, bottom: 0,
             background: COLORS.blueLight,
             opacity: 0.2,
@@ -576,7 +667,7 @@ function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChang
           style={{
             position: "absolute",
             left: `${toPercent(currentStart)}%`,
-            width: `${(durationHrs / windowHrs) * 100}%`,
+            width: `${(durationHrs / effectiveHrs) * 100}%`,
             top: 3, bottom: 3,
             background: COLORS.blueLight,
             borderRadius: 6,
@@ -590,7 +681,7 @@ function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChang
             boxShadow: dragging ? "0 2px 8px rgba(0,0,0,0.2)" : "0 1px 3px rgba(0,0,0,0.1)",
           }}
         >
-          {(durationHrs / windowHrs) > 0.2 && (
+          {(durationHrs / effectiveHrs) > 0.2 && (
             <span style={{ padding: "0 4px" }}>{formatTimePrecise(currentStart)} {"\u2013"} {formatTimePrecise(currentStart + durationHrs)}</span>
           )}
         </div>
@@ -599,7 +690,7 @@ function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChang
           <div style={{
             position: "absolute",
             left: `${toPercent(currentStart + durationHrs)}%`,
-            width: `${(commuteHrs / windowHrs) * 100}%`,
+            width: `${(commuteHrs / effectiveHrs) * 100}%`,
             top: 0, bottom: 0,
             background: COLORS.blueLight,
             opacity: 0.2,
@@ -610,9 +701,9 @@ function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChang
       </div>
       {/* Time labels */}
       <div style={styles.invTimelineLabels}>
-        <span>{win.windowStart}</span>
+        <span>{formatTimePrecise(effectiveStartHr)}</span>
         <span style={{ color: COLORS.blueLight, fontWeight: 600 }}>{formatTimePrecise(currentStart)}</span>
-        <span>{win.windowEnd}</span>
+        <span>{formatTimePrecise(effectiveEndHr)}</span>
       </div>
     </div>
   );
@@ -629,7 +720,9 @@ function TimeslotRow({
   onToggleLocation,
   commitCount,
   quorum,
-  inviteeCommute,
+  inviteeCommutes,
+  onCommuteChange,
+  maxCommuteMins,
   timelineAdjustment,
   onTimelineChange,
 }) {
@@ -733,10 +826,12 @@ function TimeslotRow({
             globalExclusions={globalExclusions}
             perSlotExclusions={perSlotExclusions}
             onToggleLocation={onToggleLocation}
+            inviteeCommutes={inviteeCommutes}
+            onCommuteChange={onCommuteChange}
           />
           <InviteeTimeline
             timeslot={timeslot}
-            commuteMins={inviteeCommute}
+            inviteeCommuteMins={maxCommuteMins}
             adjustedStart={timelineAdjustment}
             onPositionChange={onTimelineChange}
           />
@@ -756,11 +851,8 @@ export default function InviteeExperience({ onBack }) {
   const [rankings, setRankings] = useState([null, null, null]);
   const [expirationDate, setExpirationDate] = useState(getDefaultExpiration());
   const [notes, setNotes] = useState("");
-  const [inviteeCommute, setInviteeCommute] = useState(20);
-  const [editingCommute, setEditingCommute] = useState(false);
-  const [commuteEditValue, setCommuteEditValue] = useState(20);
+  const [inviteeCommutes, setInviteeCommutes] = useState({ ...INVITEE_COMMUTE_DEFAULTS }); // { locName: minutes }
   const [timelineAdjustments, setTimelineAdjustments] = useState({}); // { tsId: decimalHour | null }
-  const commuteInputRef = useRef(null);
 
   const worksTimeslots = TIMESLOTS.filter(ts => timeslotSelections[ts.id] === "works");
   const worksCount = worksTimeslots.length;
@@ -817,15 +909,19 @@ export default function InviteeExperience({ onBack }) {
     setTimelineAdjustments(prev => ({ ...prev, [tsId]: position }));
   };
 
-  const commitCommute = () => {
-    const n = parseInt(commuteEditValue);
-    setInviteeCommute(isNaN(n) || n < 0 ? 0 : Math.min(n, 180));
-    setEditingCommute(false);
+  const handleCommuteChange = (locName, minutes) => {
+    const n = parseInt(minutes);
+    setInviteeCommutes(prev => ({ ...prev, [locName]: isNaN(n) || n < 0 ? 0 : Math.min(n, 180) }));
   };
 
-  useEffect(() => {
-    if (editingCommute && commuteInputRef.current) commuteInputRef.current.focus();
-  }, [editingCommute]);
+  // Max commute across included locations for a given timeslot
+  const getMaxCommuteForTimeslot = (timeslot) => {
+    const included = timeslot.locations.filter(loc =>
+      !globalLocationExclusions.has(loc.name) && !(locationExclusions[timeslot.id] || new Set()).has(loc.name)
+    );
+    if (included.length === 0) return 0;
+    return Math.max(...included.map(loc => inviteeCommutes[loc.name] || 0));
+  };
 
   const handleUnassignSlot = (slotIndex) => {
     const next = [...rankings];
@@ -1009,41 +1105,8 @@ export default function InviteeExperience({ onBack }) {
             )}
           </div>
 
-          {/* Calendar connected + commute indicator */}
-          {screen === 1 && (
-            <div style={styles.calCommuteRow}>
-              <CalendarConnectedIndicator />
-              <div style={styles.commuteIndicator}>
-                <CommuteIcon />
-                {editingCommute ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontSize: 12, color: "#5a6a7a" }}>My commute:</span>
-                    <input
-                      ref={commuteInputRef}
-                      type="number"
-                      value={commuteEditValue}
-                      onChange={(e) => setCommuteEditValue(e.target.value)}
-                      onBlur={commitCommute}
-                      onKeyDown={(e) => { if (e.key === "Enter") commitCommute(); }}
-                      style={styles.commuteNumInput}
-                      min={0}
-                      max={180}
-                      step={5}
-                    />
-                    <span style={{ fontSize: 12, color: "#5a6a7a" }}>min</span>
-                  </div>
-                ) : (
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}
-                    onClick={() => { setCommuteEditValue(inviteeCommute); setEditingCommute(true); }}
-                  >
-                    <span style={{ fontSize: 12, color: "#5a6a7a" }}>My commute:</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.text, borderBottom: "1px dashed #b0bac5" }}>{inviteeCommute} min</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Calendar connected indicator */}
+          {screen === 1 && <CalendarConnectedIndicator />}
 
           {/* Screen 1: Selection */}
           {screen === 1 && (
@@ -1065,7 +1128,9 @@ export default function InviteeExperience({ onBack }) {
                     onToggleLocation={handlePerSlotLocationToggle}
                     commitCount={TIMESLOT_COMMITMENTS[ts.id] || 0}
                     quorum={MOCK_GATHERING.quorum}
-                    inviteeCommute={inviteeCommute}
+                    inviteeCommutes={inviteeCommutes}
+                    onCommuteChange={handleCommuteChange}
+                    maxCommuteMins={getMaxCommuteForTimeslot(ts)}
                     timelineAdjustment={timelineAdjustments[ts.id] || null}
                     onTimelineChange={(pos) => handleTimelineChange(ts.id, pos)}
                   />
@@ -1424,10 +1489,14 @@ const styles = {
   confirmStatValue: { fontSize: 20, fontWeight: 700, color: COLORS.text },
   confirmStatDivider: { width: 1, height: 32, background: "#e8ecf0" },
 
-  // Calendar + commute row
-  calCommuteRow: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 12 },
-  commuteIndicator: { display: "flex", alignItems: "center", gap: 6, color: "#5a6a7a" },
-  commuteNumInput: { width: 48, padding: "3px 6px", borderRadius: 6, border: `1.5px solid ${COLORS.blueLight}`, fontSize: 13, fontWeight: 600, color: COLORS.text, outline: "none", fontFamily: FONTS.base, background: "#fff", textAlign: "center" },
+  // Per-location commute & directions
+  locCard: { display: "flex", flexDirection: "column" },
+  locDirectionsLink: { display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 600, color: COLORS.blueLight, textDecoration: "none", borderBottom: "1px dashed " + COLORS.blueLight, lineHeight: 1, transition: "opacity 0.15s" },
+  locCommuteWrap: { padding: "0 10px 6px 40px" },
+  locCommuteRow: { display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "#5a6a7a" },
+  locCommuteValue: { fontWeight: 600, color: COLORS.text, borderBottom: "1px dashed #b0bac5", lineHeight: 1.2 },
+  locCommuteInput: { width: 44, padding: "2px 4px", borderRadius: 5, border: `1.5px solid ${COLORS.blueLight}`, fontSize: 12, fontWeight: 600, color: COLORS.text, outline: "none", fontFamily: FONTS.base, background: "#fff", textAlign: "center" },
+  locCommuteUnit: { fontSize: 11, color: COLORS.textMuted },
 
   // Invitee timeline
   invTimelineWrap: { padding: "10px 16px 14px 28px", borderTop: `1px solid ${COLORS.borderLight}`, background: "#f5f7fa" },
