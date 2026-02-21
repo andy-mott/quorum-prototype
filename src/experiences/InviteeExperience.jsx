@@ -465,7 +465,7 @@ function InlineCommuteInput({ locName, value, onChange }) {
   );
 }
 
-function ExpandedLocationPanel({ timeslot, globalExclusions, perSlotExclusions, onToggleLocation }) {
+function ExpandedLocationPanel({ timeslot, globalExclusions, perSlotExclusions, onToggleLocation, inviteeCommutes }) {
   const slotExclusions = perSlotExclusions[timeslot.id] || new Set();
 
   return (
@@ -474,11 +474,7 @@ function ExpandedLocationPanel({ timeslot, globalExclusions, perSlotExclusions, 
         const isGloballyExcluded = globalExclusions.has(loc.name);
         const isLocallyExcluded = slotExclusions.has(loc.name);
         const isIncluded = !isGloballyExcluded && !isLocallyExcluded;
-        const avail = getLocationAvailability(timeslot.date, timeslot.timeStart, timeslot.timeEnd);
-        const availPill = isIncluded ? (
-          avail.level === "green" ? styles.locAvailGreen :
-          avail.level === "amber" ? styles.locAvailAmber : styles.locAvailRed
-        ) : null;
+        const commuteMins = inviteeCommutes[loc.name] || 0;
 
         return (
           <button
@@ -506,9 +502,8 @@ function ExpandedLocationPanel({ timeslot, globalExclusions, perSlotExclusions, 
                 <LockIconSmall /> Excluded
               </span>
             ) : isIncluded ? (
-              <span style={{ ...styles.locAvailPill, ...availPill }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: BULLET_COLORS[avail.level] }} />
-                {AVAIL_LABELS[avail.level]}
+              <span style={styles.locCommutePill}>
+                <CommuteIcon /> {commuteMins} min
               </span>
             ) : null}
           </button>
@@ -718,6 +713,7 @@ function TimeslotRow({
   onToggleLocation,
   commitCount,
   quorum,
+  inviteeCommutes,
   maxCommuteMins,
   timelineAdjustment,
   onTimelineChange,
@@ -822,6 +818,7 @@ function TimeslotRow({
             globalExclusions={globalExclusions}
             perSlotExclusions={perSlotExclusions}
             onToggleLocation={onToggleLocation}
+            inviteeCommutes={inviteeCommutes}
           />
           <InviteeTimeline
             timeslot={timeslot}
@@ -1124,6 +1121,7 @@ export default function InviteeExperience({ onBack }) {
                     onToggleLocation={handlePerSlotLocationToggle}
                     commitCount={TIMESLOT_COMMITMENTS[ts.id] || 0}
                     quorum={MOCK_GATHERING.quorum}
+                    inviteeCommutes={inviteeCommutes}
                     maxCommuteMins={getMaxCommuteForTimeslot(ts)}
                     timelineAdjustment={timelineAdjustments[ts.id] || null}
                     onTimelineChange={(pos) => handleTimelineChange(ts.id, pos)}
@@ -1431,6 +1429,11 @@ const styles = {
   locLockedLabel: {
     display: "inline-flex", alignItems: "center", gap: 4,
     fontSize: 11, fontWeight: 600, color: "#b0bac5",
+  },
+  locCommutePill: {
+    display: "inline-flex", alignItems: "center", gap: 4,
+    padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600,
+    background: "#eef2f7", color: "#5a6a7a",
   },
 
   // Popover
