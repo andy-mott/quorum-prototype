@@ -1067,7 +1067,7 @@ function TimelineRow({ set, setIndex, colors, duration, commuteMins, bounds, onB
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#9aa5b4", marginTop: 2, padding: "0 2px" }}>
           <span>{set.timeStart}</span>
-          <span style={{ color: colors.accent, fontWeight: 600 }}>{formatTimePrecise(earliestStart)}</span>
+          <span style={{ color: colors.accent, fontWeight: 600 }}>{formatTimePrecise(earliestStart)} {"\u2013"} {formatTimePrecise(earliestStart + durationHrs)}</span>
         </div>
       </div>
       {/* Sub-row 2: Latest end */}
@@ -1078,7 +1078,7 @@ function TimelineRow({ set, setIndex, colors, duration, commuteMins, bounds, onB
           {renderCommuteBuffer(latestEnd, windowEnd - latestEnd, commuteAfterMins, "right")}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#9aa5b4", marginTop: 2, padding: "0 2px" }}>
-          <span style={{ color: colors.accent, fontWeight: 600 }}>{formatTimePrecise(latestEnd)}</span>
+          <span style={{ color: colors.accent, fontWeight: 600 }}>{formatTimePrecise(latestEnd - durationHrs)} {"\u2013"} {formatTimePrecise(latestEnd)}</span>
           <span>{set.timeEnd}</span>
         </div>
       </div>
