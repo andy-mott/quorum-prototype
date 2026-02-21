@@ -2,6 +2,7 @@ import { useState } from "react";
 import { COLORS, GRADIENTS, FONTS } from "./shared/styles";
 import HostSchedulingForm from "./experiences/HostSchedulingForm";
 import InviteeExperience from "./experiences/InviteeExperience";
+import InviteeCalendarExperience from "./experiences/InviteeCalendarExperience";
 
 // --- Icons for experience cards ---
 const CalendarIcon = () => (
@@ -23,6 +24,17 @@ const EnvelopeIcon = () => (
   </svg>
 );
 
+const CalendarClockIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <rect x="4" y="6" width="20" height="20" rx="4" stroke={COLORS.blueLight} strokeWidth="2.5" fill="none"/>
+    <path d="M4 13H24" stroke={COLORS.blueLight} strokeWidth="2"/>
+    <path d="M10 4V8" stroke={COLORS.blueLight} strokeWidth="2.5" strokeLinecap="round"/>
+    <path d="M18 4V8" stroke={COLORS.blueLight} strokeWidth="2.5" strokeLinecap="round"/>
+    <circle cx="24" cy="22" r="7" stroke={COLORS.blueLight} strokeWidth="2" fill="#fff"/>
+    <path d="M24 18.5V22L26 24" stroke={COLORS.blueLight} strokeWidth="1.8" strokeLinecap="round"/>
+  </svg>
+);
+
 // --- Experience registry ---
 const EXPERIENCES = [
   {
@@ -40,6 +52,14 @@ const EXPERIENCES = [
     icon: EnvelopeIcon,
     status: "active",
     component: InviteeExperience,
+  },
+  {
+    id: "invitee-calendar",
+    title: "Invitee Calendar View",
+    description: "Respond to a gathering invite using an interactive calendar that shows available days and lets you pick specific time slots.",
+    icon: CalendarClockIcon,
+    status: "active",
+    component: InviteeCalendarExperience,
   },
 ];
 
