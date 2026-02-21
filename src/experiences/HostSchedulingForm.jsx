@@ -943,7 +943,7 @@ function TimelineRow({ set, setIndex, colors, duration, commuteMins, gatheringSt
         </div>
         <div style={styles.timelineWarning}>
           <span style={{ fontSize: 14 }}>{"\u26A0\uFE0F"}</span>
-          <span>Gathering ({formatDurationLabel(duration)}) + commute ({commuteMins} min each way) exceeds this window ({set.timeStart} \u2013 {set.timeEnd})</span>
+          <span>Gathering ({formatDurationLabel(duration)}) + commute ({commuteMins} min each way) exceeds this window ({set.timeStart} {"\u2013"} {set.timeEnd})</span>
         </div>
       </div>
     );
@@ -953,7 +953,7 @@ function TimelineRow({ set, setIndex, colors, duration, commuteMins, gatheringSt
     <div style={styles.timelineRow}>
       <div style={styles.timelineRowHeader}>
         <div style={{ ...styles.timelineSetDot, background: colors.accent }} />
-        <span style={styles.timelineSetLabel}>Availability {setIndex + 1}: {set.timeStart} \u2013 {set.timeEnd}</span>
+        <span style={styles.timelineSetLabel}>Availability {setIndex + 1}: {set.timeStart} {"\u2013"} {set.timeEnd}</span>
         <span style={styles.timelineSetDates}>{dateLabels}</span>
       </div>
       <div ref={barRef} style={styles.timelineBar}>
@@ -1009,7 +1009,7 @@ function TimelineRow({ set, setIndex, colors, duration, commuteMins, gatheringSt
           }}
         >
           {(durationHrs / windowHrs) > 0.22 && (
-            <span style={{ padding: "0 4px" }}>{formatTimePrecise(currentStart)} \u2013 {formatTimePrecise(currentStart + durationHrs)}</span>
+            <span style={{ padding: "0 4px" }}>{formatTimePrecise(currentStart)} {"\u2013"} {formatTimePrecise(currentStart + durationHrs)}</span>
           )}
         </div>
         {/* Commute buffer after */}
