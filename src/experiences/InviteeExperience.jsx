@@ -130,6 +130,21 @@ function parseTimeToHour(timeStr) {
   return hr + min / 60;
 }
 
+function isTimeslotAdjusted(timeslot, adjustedStart, maxCommuteMins) {
+  const win = TIMESLOT_WINDOWS[timeslot.id];
+  if (!win || adjustedStart == null) return false;
+  const hostCommuteHrs = (win.hostCommuteBuffer || 0) / 60;
+  const effectiveStartHr = parseTimeToHour(win.windowStart) + hostCommuteHrs;
+  const effectiveEndHr = parseTimeToHour(win.windowEnd) - hostCommuteHrs;
+  const durationHrs = MOCK_GATHERING.duration / 60;
+  const commuteHrs = maxCommuteMins / 60;
+  const minStart = effectiveStartHr + commuteHrs;
+  const maxStart = effectiveEndHr - durationHrs - commuteHrs;
+  const hostSuggestedStart = parseTimeToHour(timeslot.timeStart);
+  const currentStart = Math.max(minStart, Math.min(maxStart, adjustedStart));
+  return Math.abs(currentStart - hostSuggestedStart) > 0.08;
+}
+
 function getFreeGaps(events, windowStart, windowEnd) {
   const sorted = [...events].filter(e => e.end > windowStart && e.start < windowEnd).sort((a, b) => a.start - b.start);
   const gaps = [];
@@ -234,6 +249,14 @@ const CheckIcon = () => (
 const XIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
     <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
+const QuestionIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path d="M5.5 5.25C5.5 4.42 6.17 3.75 7 3.75C7.83 3.75 8.5 4.42 8.5 5.25C8.5 6.08 7.83 6.5 7 7V7.75"
+      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="7" cy="10" r="0.75" fill="currentColor"/>
   </svg>
 );
 
@@ -540,7 +563,7 @@ function InviteeTimeline({ timeslot, inviteeCommuteMins, adjustedStart, onPositi
     ? Math.max(minStart, Math.min(maxStart, adjustedStart))
     : Math.max(minStart, Math.min(maxStart, hostSuggestedStart));
 
-  const isAdjusted = adjustedStart != null && Math.abs(currentStart - hostSuggestedStart) > 0.08;
+  const isAdjusted = isTimeslotAdjusted(timeslot, adjustedStart, inviteeCommuteMins);
 
   const toPercent = (h) => ((h - effectiveStartHr) / effectiveHrs) * 100;
 
@@ -611,23 +634,6 @@ function InviteeTimeline({ timeslot, inviteeCommuteMins, adjustedStart, onPositi
         )}
       </div>
       <div ref={barRef} style={styles.invTimelineBar}>
-        {/* Calendar event overlays */}
-        {calEvents.map((ev, i) => {
-          const evS = Math.max(ev.start, effectiveStartHr);
-          const evE = Math.min(ev.end, effectiveEndHr);
-          return (
-            <div key={i} title={ev.title} style={{
-              position: "absolute",
-              left: `${toPercent(evS)}%`,
-              width: `${((evE - evS) / effectiveHrs) * 100}%`,
-              top: 0, bottom: 0,
-              background: ev.color || "#e53935",
-              opacity: 0.15,
-              borderRadius: 3,
-              zIndex: 1,
-            }} />
-          );
-        })}
         {/* Host suggestion ghost (when adjusted) */}
         {isAdjusted && (
           <div style={{
@@ -692,6 +698,27 @@ function InviteeTimeline({ timeslot, inviteeCommuteMins, adjustedStart, onPositi
           }} />
         )}
       </div>
+      {/* Busy-time indicators (below timeline bar) */}
+      {calEvents.length > 0 && (
+        <div style={styles.invBusyRow}>
+          {calEvents.map((ev, i) => {
+            const evS = Math.max(ev.start, effectiveStartHr);
+            const evE = Math.min(ev.end, effectiveEndHr);
+            return (
+              <div key={i} title={ev.title} style={{
+                position: "absolute",
+                left: `${toPercent(evS)}%`,
+                width: `${((evE - evS) / effectiveHrs) * 100}%`,
+                top: 0,
+                height: 4,
+                background: "#e53935",
+                borderRadius: 2,
+                opacity: 0.85,
+              }} />
+            );
+          })}
+        </div>
+      )}
       {/* Time labels */}
       <div style={styles.invTimelineLabels}>
         <span>{formatTimePrecise(effectiveStartHr)}</span>
@@ -722,15 +749,19 @@ function TimeslotRow({
   const avail = getTimeslotAvailability(timeslot, globalExclusions, perSlotExclusions);
   const includedCount = getIncludedLocationCount(timeslot, globalExclusions, perSlotExclusions);
   const isWorks = selection === "works";
+  const isProposed = selection === "proposed";
   const isDoesntWork = selection === "doesnt-work";
+  const isPositive = isWorks || isProposed;
+  const isTimelineAdjusted = isTimeslotAdjusted(timeslot, timelineAdjustment, maxCommuteMins);
   const needsOne = commitCount === quorum - 1;
-  const wouldReachQuorum = isWorks && needsOne;
-  const commitWithUser = isWorks ? commitCount + 1 : commitCount;
+  const wouldReachQuorum = isPositive && needsOne;
+  const commitWithUser = isPositive ? commitCount + 1 : commitCount;
 
   return (
     <div style={{
       ...styles.tsCard,
       ...(isWorks ? styles.tsCardWorks : {}),
+      ...(isProposed ? styles.tsCardProposed : {}),
       ...(isDoesntWork ? styles.tsCardDoesntWork : {}),
     }}>
       <div
@@ -782,12 +813,29 @@ function TimeslotRow({
         {/* Toggle buttons */}
         <div style={styles.tsToggles} onClick={(e) => e.stopPropagation()}>
           <button
-            onClick={() => onSelect(timeslot.id, isWorks ? null : "works")}
-            style={{ ...styles.tsToggleBtn, ...(isWorks ? styles.tsToggleBtnWorks : {}) }}
-            title="Works for me"
+            onClick={() => !isTimelineAdjusted && onSelect(timeslot.id, isWorks ? null : "works")}
+            style={{
+              ...styles.tsToggleBtn,
+              ...(isWorks ? styles.tsToggleBtnWorks : {}),
+              ...(isTimelineAdjusted && !isWorks ? styles.tsToggleBtnDisabled : {}),
+            }}
+            title={isTimelineAdjusted ? "Reset timeline to accept host time" : "Works for me"}
+            disabled={isTimelineAdjusted && !isWorks}
           >
             <CheckIcon />
           </button>
+          {isTimelineAdjusted && (
+            <button
+              onClick={() => onSelect(timeslot.id, isProposed ? null : "proposed")}
+              style={{
+                ...styles.tsToggleBtn,
+                ...(isProposed ? styles.tsToggleBtnProposed : {}),
+              }}
+              title="Propose this adjusted time"
+            >
+              <QuestionIcon />
+            </button>
+          )}
           <button
             onClick={() => onSelect(timeslot.id, isDoesntWork ? null : "doesnt-work")}
             style={{ ...styles.tsToggleBtn, ...(isDoesntWork ? styles.tsToggleBtnDoesntWork : {}) }}
@@ -845,8 +893,11 @@ export default function InviteeExperience({ onBack }) {
   const [inviteeCommutes, setInviteeCommutes] = useState({ ...INVITEE_COMMUTE_DEFAULTS }); // { locName: minutes }
   const [timelineAdjustments, setTimelineAdjustments] = useState({}); // { tsId: decimalHour | null }
 
-  const worksTimeslots = TIMESLOTS.filter(ts => timeslotSelections[ts.id] === "works");
+  const worksTimeslots = TIMESLOTS.filter(ts =>
+    timeslotSelections[ts.id] === "works" || timeslotSelections[ts.id] === "proposed"
+  );
   const worksCount = worksTimeslots.length;
+  const proposedCount = Object.values(timeslotSelections).filter(v => v === "proposed").length;
   const doesntWorkCount = Object.values(timeslotSelections).filter(v => v === "doesnt-work").length;
 
   const maxRanks = Math.min(3, worksCount);
@@ -898,6 +949,20 @@ export default function InviteeExperience({ onBack }) {
 
   const handleTimelineChange = (tsId, position) => {
     setTimelineAdjustments(prev => ({ ...prev, [tsId]: position }));
+    if (position === null) {
+      // Resetting to host suggestion: clear "proposed" selection
+      if (timeslotSelections[tsId] === "proposed") {
+        setTimeslotSelections(prev => ({ ...prev, [tsId]: null }));
+      }
+    } else {
+      // Adjusting: if currently "works", auto-clear (user must explicitly propose)
+      if (timeslotSelections[tsId] === "works") {
+        const ts = TIMESLOTS.find(t => t.id === tsId);
+        if (ts && isTimeslotAdjusted(ts, position, getMaxCommuteForTimeslot(ts))) {
+          setTimeslotSelections(prev => ({ ...prev, [tsId]: null }));
+        }
+      }
+    }
   };
 
   const handleCommuteChange = (locName, minutes) => {
@@ -1282,7 +1347,8 @@ export default function InviteeExperience({ onBack }) {
         {screen === 1 && (worksCount > 0 || doesntWorkCount > 0) && (
           <div style={styles.selectionFooter}>
             <div style={styles.selectionCount}>
-              {worksCount > 0 && <span style={{ color: "#43a047", fontWeight: 600 }}>{worksCount} work{worksCount !== 1 ? "" : "s"}</span>}
+              {(worksCount - proposedCount) > 0 && <span style={{ color: "#43a047", fontWeight: 600 }}>{worksCount - proposedCount} work{(worksCount - proposedCount) !== 1 ? "" : "s"}</span>}
+              {proposedCount > 0 && <span style={{ color: "#f9a825", fontWeight: 600 }}>{proposedCount} proposed</span>}
               {doesntWorkCount > 0 && <span style={{ color: "#e53935", fontWeight: 600 }}>{doesntWorkCount} don't work</span>}
             </div>
             <span style={{ fontSize: 12, color: COLORS.textLight }}>{TIMESLOTS.length - worksCount - doesntWorkCount} remaining</span>
@@ -1374,6 +1440,7 @@ const styles = {
     overflow: "hidden", transition: "all 0.2s",
   },
   tsCardWorks: { borderColor: "#a5d6a7", background: "#f1f8e9" },
+  tsCardProposed: { borderColor: "#ffe082", background: "#fffde7" },
   tsCardDoesntWork: { borderColor: "#ffcdd2", background: "#fff5f5", opacity: 0.65 },
   tsMainRow: {
     display: "flex", alignItems: "center", gap: 12,
@@ -1403,7 +1470,9 @@ const styles = {
     fontFamily: FONTS.base, padding: 0,
   },
   tsToggleBtnWorks: { borderColor: "#43a047", background: "#43a047", color: "#fff" },
+  tsToggleBtnProposed: { borderColor: "#f9a825", background: "#f9a825", color: "#fff" },
   tsToggleBtnDoesntWork: { borderColor: "#e53935", background: "#e53935", color: "#fff" },
+  tsToggleBtnDisabled: { opacity: 0.35, cursor: "not-allowed", pointerEvents: "none" },
 
   // Expanded location panel
   expandedPanel: {
@@ -1503,6 +1572,7 @@ const styles = {
   invTimelineLabel: { fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.4 },
   invTimelineReset: { fontSize: 11, fontWeight: 600, color: COLORS.blueLight, background: "none", border: "none", cursor: "pointer", fontFamily: FONTS.base, padding: "2px 6px", borderRadius: 4, transition: "background 0.15s" },
   invTimelineBar: { position: "relative", height: 32, borderRadius: 8, background: "#e8ecf0", overflow: "hidden" },
+  invBusyRow: { position: "relative", height: 6, marginTop: 2 },
   invTimelineLabels: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, color: COLORS.textMuted, marginTop: 3, padding: "0 2px" },
   invTimelineWarning: { fontSize: 12, color: "#e65100", background: "#fff8f0", border: "1px solid #ffe0b2", borderRadius: 8, padding: "8px 12px", lineHeight: 1.4 },
 };
