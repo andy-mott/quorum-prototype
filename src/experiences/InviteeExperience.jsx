@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { COLORS, GRADIENTS, FONTS } from "../shared/styles";
 
 // --- Mock Gathering Data (what the host published) ---
@@ -59,6 +59,15 @@ const TIMESLOT_COMMITMENTS = {
   "ts-4": 1,  // Mar 12, 2–4 PM
 };
 
+// --- Availability windows the host scheduled within ---
+// The host used these windows and then positioned the gathering (timeStart/timeEnd) within them
+const TIMESLOT_WINDOWS = {
+  "ts-1": { windowStart: "8:00 AM", windowEnd: "2:00 PM" },   // Host placed 9–11 AM
+  "ts-2": { windowStart: "8:00 AM", windowEnd: "2:00 PM" },   // Host placed 9–11 AM
+  "ts-3": { windowStart: "12:00 PM", windowEnd: "6:00 PM" },  // Host placed 2–4 PM
+  "ts-4": { windowStart: "12:00 PM", windowEnd: "6:00 PM" },  // Host placed 2–4 PM
+};
+
 // --- Deterministic Mock Calendar Events Per Date ---
 // Mar 5: morning conflict -> amber (9-11 AM window)
 // Mar 6: fully free morning -> green (9-11 AM window)
@@ -94,6 +103,14 @@ function formatHour(h) {
   const ampm = hr >= 12 ? "PM" : "AM";
   const display = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
   return `${display}:${min} ${ampm}`;
+}
+
+function formatTimePrecise(h) {
+  const hr = Math.floor(h);
+  const min = Math.round((h - hr) * 60);
+  const ampm = hr >= 12 ? "PM" : "AM";
+  const display = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
+  return `${display}:${String(min).padStart(2, "0")} ${ampm}`;
 }
 
 function parseTimeToHour(timeStr) {
@@ -271,6 +288,17 @@ const PeopleSmallIcon = () => (
   </svg>
 );
 
+const CommuteIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path d="M2.5 9.5H11.5V7L10 4H4L2.5 7V9.5Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
+    <path d="M2.5 7H11.5" stroke="currentColor" strokeWidth="1"/>
+    <circle cx="4.5" cy="8.5" r="0.6" fill="currentColor"/>
+    <circle cx="9.5" cy="8.5" r="0.6" fill="currentColor"/>
+    <path d="M3 9.5V11" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+    <path d="M11 9.5V11" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/>
+  </svg>
+);
+
 const RANK_COLORS = [
   { bg: "#fffde7", border: "#f9a825", badge: "#f9a825", label: "1st choice" },
   { bg: "#fafafa", border: "#90a4ae", badge: "#78909c", label: "2nd choice" },
@@ -297,7 +325,7 @@ function AvailabilityPopover({ timeslot, style }) {
         </span>
       </div>
       <div style={styles.popoverWindow}>
-        <span>{timeslot.timeStart} \u2014 {timeslot.timeEnd}</span>
+        <span>{timeslot.timeStart} {"\u2014"} {timeslot.timeEnd}</span>
       </div>
       <ul style={styles.popoverList}>
         {info.items.map((item, i) => (
@@ -404,6 +432,192 @@ function ExpandedLocationPanel({ timeslot, globalExclusions, perSlotExclusions, 
   );
 }
 
+function InviteeTimeline({ timeslot, commuteMins, adjustedStart, onPositionChange }) {
+  const barRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+  const [barWidth, setBarWidth] = useState(400);
+  const dragStartRef = useRef(null);
+
+  const win = TIMESLOT_WINDOWS[timeslot.id];
+  if (!win) return null;
+
+  const windowStartHr = parseTimeToHour(win.windowStart);
+  const windowEndHr = parseTimeToHour(win.windowEnd);
+  const windowHrs = windowEndHr - windowStartHr;
+  const durationHrs = MOCK_GATHERING.duration / 60;
+  const commuteHrs = commuteMins / 60;
+  const hostSuggestedStart = parseTimeToHour(timeslot.timeStart);
+
+  const minStart = windowStartHr + commuteHrs;
+  const maxStart = windowEndHr - durationHrs - commuteHrs;
+  const fits = durationHrs + commuteHrs * 2 <= windowHrs + 0.01;
+
+  const currentStart = adjustedStart != null
+    ? Math.max(minStart, Math.min(maxStart, adjustedStart))
+    : Math.max(minStart, Math.min(maxStart, hostSuggestedStart));
+
+  const isAdjusted = adjustedStart != null && Math.abs(currentStart - hostSuggestedStart) > 0.08;
+
+  const toPercent = (h) => ((h - windowStartHr) / windowHrs) * 100;
+
+  // Calendar events for this date
+  const calEvents = (DETERMINISTIC_EVENTS[timeslot.date] || []).filter(
+    ev => ev.end > windowStartHr && ev.start < windowEndHr
+  );
+
+  // Measure bar
+  useEffect(() => {
+    if (barRef.current) setBarWidth(barRef.current.offsetWidth);
+    const onResize = () => { if (barRef.current) setBarWidth(barRef.current.offsetWidth); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const pxPerHour = barWidth / windowHrs;
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onMouseMove = (e) => {
+      const dx = e.clientX - dragStartRef.current.clientX;
+      const dHrs = dx / pxPerHour;
+      let newStart = dragStartRef.current.startPos + dHrs;
+      newStart = Math.max(minStart, Math.min(maxStart, newStart));
+      newStart = Math.round(newStart * 12) / 12; // snap to 5 min
+      onPositionChange(newStart);
+    };
+    const onMouseUp = () => setDragging(false);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [dragging, pxPerHour, minStart, maxStart, onPositionChange]);
+
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragStartRef.current = { clientX: e.clientX, startPos: currentStart };
+    setDragging(true);
+  };
+
+  if (!fits) {
+    return (
+      <div style={styles.invTimelineWrap}>
+        <div style={styles.invTimelineWarning}>
+          Commute ({commuteMins} min each way) doesn't fit within this window.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.invTimelineWrap}>
+      <div style={styles.invTimelineHeader}>
+        <span style={styles.invTimelineLabel}>
+          {isAdjusted ? "Your adjusted time" : "Host suggested time"}
+        </span>
+        {isAdjusted && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPositionChange(null); }}
+            style={styles.invTimelineReset}
+          >
+            Reset
+          </button>
+        )}
+      </div>
+      <div ref={barRef} style={styles.invTimelineBar}>
+        {/* Calendar event overlays */}
+        {calEvents.map((ev, i) => {
+          const evS = Math.max(ev.start, windowStartHr);
+          const evE = Math.min(ev.end, windowEndHr);
+          return (
+            <div key={i} title={ev.title} style={{
+              position: "absolute",
+              left: `${toPercent(evS)}%`,
+              width: `${((evE - evS) / windowHrs) * 100}%`,
+              top: 0, bottom: 0,
+              background: ev.color || "#e53935",
+              opacity: 0.15,
+              borderRadius: 3,
+              zIndex: 1,
+            }} />
+          );
+        })}
+        {/* Host suggestion ghost (when adjusted) */}
+        {isAdjusted && (
+          <div style={{
+            position: "absolute",
+            left: `${toPercent(hostSuggestedStart)}%`,
+            width: `${(durationHrs / windowHrs) * 100}%`,
+            top: 4, bottom: 4,
+            border: "2px dashed #b0bac5",
+            borderRadius: 6,
+            zIndex: 1,
+            opacity: 0.5,
+          }} />
+        )}
+        {/* Commute buffer before */}
+        {commuteHrs > 0 && (
+          <div style={{
+            position: "absolute",
+            left: `${toPercent(currentStart - commuteHrs)}%`,
+            width: `${(commuteHrs / windowHrs) * 100}%`,
+            top: 0, bottom: 0,
+            background: COLORS.blueLight,
+            opacity: 0.2,
+            borderRadius: "6px 0 0 6px",
+            zIndex: 2,
+          }} />
+        )}
+        {/* Gathering block (draggable) */}
+        <div
+          onMouseDown={handleMouseDown}
+          style={{
+            position: "absolute",
+            left: `${toPercent(currentStart)}%`,
+            width: `${(durationHrs / windowHrs) * 100}%`,
+            top: 3, bottom: 3,
+            background: COLORS.blueLight,
+            borderRadius: 6,
+            cursor: dragging ? "grabbing" : "grab",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "#fff", fontSize: 10, fontWeight: 600,
+            overflow: "hidden", whiteSpace: "nowrap",
+            userSelect: "none",
+            zIndex: 3,
+            transition: dragging ? "none" : "left 0.15s ease",
+            boxShadow: dragging ? "0 2px 8px rgba(0,0,0,0.2)" : "0 1px 3px rgba(0,0,0,0.1)",
+          }}
+        >
+          {(durationHrs / windowHrs) > 0.2 && (
+            <span style={{ padding: "0 4px" }}>{formatTimePrecise(currentStart)} {"\u2013"} {formatTimePrecise(currentStart + durationHrs)}</span>
+          )}
+        </div>
+        {/* Commute buffer after */}
+        {commuteHrs > 0 && (
+          <div style={{
+            position: "absolute",
+            left: `${toPercent(currentStart + durationHrs)}%`,
+            width: `${(commuteHrs / windowHrs) * 100}%`,
+            top: 0, bottom: 0,
+            background: COLORS.blueLight,
+            opacity: 0.2,
+            borderRadius: "0 6px 6px 0",
+            zIndex: 2,
+          }} />
+        )}
+      </div>
+      {/* Time labels */}
+      <div style={styles.invTimelineLabels}>
+        <span>{win.windowStart}</span>
+        <span style={{ color: COLORS.blueLight, fontWeight: 600 }}>{formatTimePrecise(currentStart)}</span>
+        <span>{win.windowEnd}</span>
+      </div>
+    </div>
+  );
+}
+
 function TimeslotRow({
   timeslot,
   selection,
@@ -415,6 +629,9 @@ function TimeslotRow({
   onToggleLocation,
   commitCount,
   quorum,
+  inviteeCommute,
+  timelineAdjustment,
+  onTimelineChange,
 }) {
   const [showPopover, setShowPopover] = useState(false);
   const avail = getTimeslotAvailability(timeslot, globalExclusions, perSlotExclusions);
@@ -443,7 +660,7 @@ function TimeslotRow({
           <div style={styles.tsDateRow}>
             <span style={styles.tsDate}>{formatDate(timeslot.date)}</span>
             <span style={styles.tsDot}>&middot;</span>
-            <span style={styles.tsTime}>{timeslot.timeStart}\u2013{timeslot.timeEnd}</span>
+            <span style={styles.tsTime}>{timeslot.timeStart}{"\u2013"}{timeslot.timeEnd}</span>
           </div>
           <div style={styles.tsLocCountRow}>
             <span style={styles.tsLocCount}>{includedCount} location{includedCount !== 1 ? "s" : ""}</span>
@@ -508,14 +725,22 @@ function TimeslotRow({
         />
       </div>
 
-      {/* Expanded location panel */}
+      {/* Expanded location panel + timeline */}
       {isExpanded && (
-        <ExpandedLocationPanel
-          timeslot={timeslot}
-          globalExclusions={globalExclusions}
-          perSlotExclusions={perSlotExclusions}
-          onToggleLocation={onToggleLocation}
-        />
+        <>
+          <ExpandedLocationPanel
+            timeslot={timeslot}
+            globalExclusions={globalExclusions}
+            perSlotExclusions={perSlotExclusions}
+            onToggleLocation={onToggleLocation}
+          />
+          <InviteeTimeline
+            timeslot={timeslot}
+            commuteMins={inviteeCommute}
+            adjustedStart={timelineAdjustment}
+            onPositionChange={onTimelineChange}
+          />
+        </>
       )}
     </div>
   );
@@ -531,6 +756,11 @@ export default function InviteeExperience({ onBack }) {
   const [rankings, setRankings] = useState([null, null, null]);
   const [expirationDate, setExpirationDate] = useState(getDefaultExpiration());
   const [notes, setNotes] = useState("");
+  const [inviteeCommute, setInviteeCommute] = useState(20);
+  const [editingCommute, setEditingCommute] = useState(false);
+  const [commuteEditValue, setCommuteEditValue] = useState(20);
+  const [timelineAdjustments, setTimelineAdjustments] = useState({}); // { tsId: decimalHour | null }
+  const commuteInputRef = useRef(null);
 
   const worksTimeslots = TIMESLOTS.filter(ts => timeslotSelections[ts.id] === "works");
   const worksCount = worksTimeslots.length;
@@ -582,6 +812,20 @@ export default function InviteeExperience({ onBack }) {
       }
     }
   };
+
+  const handleTimelineChange = (tsId, position) => {
+    setTimelineAdjustments(prev => ({ ...prev, [tsId]: position }));
+  };
+
+  const commitCommute = () => {
+    const n = parseInt(commuteEditValue);
+    setInviteeCommute(isNaN(n) || n < 0 ? 0 : Math.min(n, 180));
+    setEditingCommute(false);
+  };
+
+  useEffect(() => {
+    if (editingCommute && commuteInputRef.current) commuteInputRef.current.focus();
+  }, [editingCommute]);
 
   const handleUnassignSlot = (slotIndex) => {
     const next = [...rankings];
@@ -652,6 +896,7 @@ export default function InviteeExperience({ onBack }) {
                 setLocationExclusions({});
                 setExpandedTimeslot(null);
                 setRankings([null, null, null]);
+                setTimelineAdjustments({});
                 setExpirationDate(getDefaultExpiration());
                 setNotes("");
               }}
@@ -764,8 +1009,41 @@ export default function InviteeExperience({ onBack }) {
             )}
           </div>
 
-          {/* Calendar connected indicator */}
-          {screen === 1 && <CalendarConnectedIndicator />}
+          {/* Calendar connected + commute indicator */}
+          {screen === 1 && (
+            <div style={styles.calCommuteRow}>
+              <CalendarConnectedIndicator />
+              <div style={styles.commuteIndicator}>
+                <CommuteIcon />
+                {editingCommute ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ fontSize: 12, color: "#5a6a7a" }}>My commute:</span>
+                    <input
+                      ref={commuteInputRef}
+                      type="number"
+                      value={commuteEditValue}
+                      onChange={(e) => setCommuteEditValue(e.target.value)}
+                      onBlur={commitCommute}
+                      onKeyDown={(e) => { if (e.key === "Enter") commitCommute(); }}
+                      style={styles.commuteNumInput}
+                      min={0}
+                      max={180}
+                      step={5}
+                    />
+                    <span style={{ fontSize: 12, color: "#5a6a7a" }}>min</span>
+                  </div>
+                ) : (
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}
+                    onClick={() => { setCommuteEditValue(inviteeCommute); setEditingCommute(true); }}
+                  >
+                    <span style={{ fontSize: 12, color: "#5a6a7a" }}>My commute:</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.text, borderBottom: "1px dashed #b0bac5" }}>{inviteeCommute} min</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Screen 1: Selection */}
           {screen === 1 && (
@@ -787,6 +1065,9 @@ export default function InviteeExperience({ onBack }) {
                     onToggleLocation={handlePerSlotLocationToggle}
                     commitCount={TIMESLOT_COMMITMENTS[ts.id] || 0}
                     quorum={MOCK_GATHERING.quorum}
+                    inviteeCommute={inviteeCommute}
+                    timelineAdjustment={timelineAdjustments[ts.id] || null}
+                    onTimelineChange={(pos) => handleTimelineChange(ts.id, pos)}
                   />
                 ))}
               </div>
@@ -821,7 +1102,7 @@ export default function InviteeExperience({ onBack }) {
                       {ts ? (
                         <div style={styles.rankSlotContent}>
                           <div>{formatDate(ts.date)}</div>
-                          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>{ts.timeStart}\u2013{ts.timeEnd}</div>
+                          <div style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 2 }}>{ts.timeStart}{"\u2013"}{ts.timeEnd}</div>
                           {slotReachesQuorum ? (
                             <div style={{ fontSize: 10, color: "#f9a825", fontWeight: 700, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
                               <SparkIcon /> Quorum!
@@ -867,7 +1148,7 @@ export default function InviteeExperience({ onBack }) {
                       )}
                       <div style={{ flex: 1, textAlign: "left" }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.text }}>
-                          {formatDate(ts.date)} &middot; {ts.timeStart}\u2013{ts.timeEnd}
+                          {formatDate(ts.date)} &middot; {ts.timeStart}{"\u2013"}{ts.timeEnd}
                         </div>
                         <div style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                           <span>{includedLocs.map(l => l.name.split(" \u2014 ")[0]).join(", ")}</span>
@@ -1142,4 +1423,18 @@ const styles = {
   confirmStatLabel: { fontSize: 12, color: COLORS.textLight, fontWeight: 500 },
   confirmStatValue: { fontSize: 20, fontWeight: 700, color: COLORS.text },
   confirmStatDivider: { width: 1, height: 32, background: "#e8ecf0" },
+
+  // Calendar + commute row
+  calCommuteRow: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  commuteIndicator: { display: "flex", alignItems: "center", gap: 6, color: "#5a6a7a" },
+  commuteNumInput: { width: 48, padding: "3px 6px", borderRadius: 6, border: `1.5px solid ${COLORS.blueLight}`, fontSize: 13, fontWeight: 600, color: COLORS.text, outline: "none", fontFamily: FONTS.base, background: "#fff", textAlign: "center" },
+
+  // Invitee timeline
+  invTimelineWrap: { padding: "10px 16px 14px 28px", borderTop: `1px solid ${COLORS.borderLight}`, background: "#f5f7fa" },
+  invTimelineHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  invTimelineLabel: { fontSize: 11, fontWeight: 600, color: COLORS.textMuted, textTransform: "uppercase", letterSpacing: 0.4 },
+  invTimelineReset: { fontSize: 11, fontWeight: 600, color: COLORS.blueLight, background: "none", border: "none", cursor: "pointer", fontFamily: FONTS.base, padding: "2px 6px", borderRadius: 4, transition: "background 0.15s" },
+  invTimelineBar: { position: "relative", height: 32, borderRadius: 8, background: "#e8ecf0", overflow: "hidden" },
+  invTimelineLabels: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10, color: COLORS.textMuted, marginTop: 3, padding: "0 2px" },
+  invTimelineWarning: { fontSize: 12, color: "#e65100", background: "#fff8f0", border: "1px solid #ffe0b2", borderRadius: 8, padding: "8px 12px", lineHeight: 1.4 },
 };
