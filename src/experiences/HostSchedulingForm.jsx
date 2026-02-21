@@ -869,9 +869,9 @@ function CommuteInput({ locId, value, onChange }) {
   );
 }
 
-function TimelineRow({ set, setIndex, colors, duration, commuteMins, gatheringStart, onPositionChange, busyEvents }) {
+function TimelineRow({ set, setIndex, colors, duration, commuteMins, bounds, onBoundsChange, busyEvents }) {
   const barRef = useRef(null);
-  const [dragging, setDragging] = useState(false);
+  const [dragTarget, setDragTarget] = useState(null); // "start" | "end" | null
   const [barWidth, setBarWidth] = useState(500);
   const dragStartRef = useRef(null);
 
@@ -880,12 +880,22 @@ function TimelineRow({ set, setIndex, colors, duration, commuteMins, gatheringSt
   const windowHrs = windowEnd - windowStart;
   const durationHrs = duration / 60;
   const commuteHrs = commuteMins / 60;
-  const totalNeeded = durationHrs + commuteHrs * 2;
-  const fits = totalNeeded <= windowHrs + 0.01;
+  const fits = durationHrs <= windowHrs + 0.01;
 
-  const minStart = windowStart + commuteHrs;
-  const maxStart = windowEnd - durationHrs - commuteHrs;
-  const currentStart = gatheringStart != null ? Math.max(minStart, Math.min(maxStart, gatheringStart)) : (minStart + maxStart) / 2;
+  // Defaults: inset by commute time
+  const defaultStart = Math.min(windowStart + commuteHrs, windowEnd - durationHrs);
+  const defaultEnd = Math.max(windowEnd - commuteHrs, windowStart + durationHrs);
+
+  let earliestStart = bounds?.start ?? defaultStart;
+  let latestEnd = bounds?.end ?? defaultEnd;
+
+  // Clamp within hard constraints
+  earliestStart = Math.max(windowStart, Math.min(earliestStart, windowEnd - durationHrs));
+  latestEnd = Math.min(windowEnd, Math.max(latestEnd, earliestStart + durationHrs));
+
+  const feasibleHrs = latestEnd - earliestStart;
+  const commuteBeforeHrs = earliestStart - windowStart;
+  const commuteAfterHrs = windowEnd - latestEnd;
 
   const toPercent = (h) => ((h - windowStart) / windowHrs) * 100;
 
@@ -900,29 +910,42 @@ function TimelineRow({ set, setIndex, colors, duration, commuteMins, gatheringSt
   const pxPerHour = barWidth / windowHrs;
 
   useEffect(() => {
-    if (!dragging) return;
+    if (!dragTarget) return;
     const onMouseMove = (e) => {
       const dx = e.clientX - dragStartRef.current.clientX;
       const dHrs = dx / pxPerHour;
-      let newStart = dragStartRef.current.startPos + dHrs;
-      newStart = Math.max(minStart, Math.min(maxStart, newStart));
-      // Snap to nearest 5 min (1/12 hour)
-      newStart = Math.round(newStart * 12) / 12;
-      onPositionChange(newStart);
+      if (dragTarget === "start") {
+        let newStart = dragStartRef.current.startVal + dHrs;
+        newStart = Math.max(windowStart, Math.min(latestEnd - durationHrs, newStart));
+        newStart = Math.round(newStart * 12) / 12; // snap 5 min
+        onBoundsChange({ start: newStart, end: latestEnd });
+      } else {
+        let newEnd = dragStartRef.current.startVal + dHrs;
+        newEnd = Math.max(earliestStart + durationHrs, Math.min(windowEnd, newEnd));
+        newEnd = Math.round(newEnd * 12) / 12;
+        onBoundsChange({ start: earliestStart, end: newEnd });
+      }
     };
-    const onMouseUp = () => setDragging(false);
+    const onMouseUp = () => setDragTarget(null);
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [dragging, pxPerHour, minStart, maxStart, onPositionChange]);
+  }, [dragTarget, pxPerHour, windowStart, windowEnd, earliestStart, latestEnd, durationHrs, onBoundsChange]);
 
-  const handleMouseDown = (e) => {
+  const handleStartDown = (e) => {
     e.preventDefault();
-    dragStartRef.current = { clientX: e.clientX, startPos: currentStart };
-    setDragging(true);
+    e.stopPropagation();
+    dragStartRef.current = { clientX: e.clientX, startVal: earliestStart };
+    setDragTarget("start");
+  };
+  const handleEndDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragStartRef.current = { clientX: e.clientX, startVal: latestEnd };
+    setDragTarget("end");
   };
 
   // Date labels
@@ -943,11 +966,13 @@ function TimelineRow({ set, setIndex, colors, duration, commuteMins, gatheringSt
         </div>
         <div style={styles.timelineWarning}>
           <span style={{ fontSize: 14 }}>{"\u26A0\uFE0F"}</span>
-          <span>Gathering ({formatDurationLabel(duration)}) + commute ({commuteMins} min each way) exceeds this window ({set.timeStart} {"\u2013"} {set.timeEnd})</span>
+          <span>Gathering ({formatDurationLabel(duration)}) exceeds this window ({set.timeStart} {"\u2013"} {set.timeEnd})</span>
         </div>
       </div>
     );
   }
+
+  const canDrag = feasibleHrs > durationHrs + 0.01;
 
   return (
     <div style={styles.timelineRow}>
@@ -975,52 +1000,85 @@ function TimelineRow({ set, setIndex, colors, duration, commuteMins, gatheringSt
             }} />
           );
         })}
-        {/* Commute buffer before */}
-        {commuteHrs > 0 && (
+        {/* Commute buffer before (window start → earliest start) */}
+        {commuteBeforeHrs > 0.01 && (
           <div style={{
             position: "absolute",
-            left: `${toPercent(currentStart - commuteHrs)}%`,
-            width: `${(commuteHrs / windowHrs) * 100}%`,
+            left: 0,
+            width: `${toPercent(earliestStart)}%`,
             top: 0, bottom: 0,
             background: colors.accent,
-            opacity: 0.15,
+            opacity: 0.12,
             borderRadius: "6px 0 0 6px",
             zIndex: 2,
           }} />
         )}
-        {/* Gathering block */}
-        <div
-          onMouseDown={handleMouseDown}
-          style={{
-            position: "absolute",
-            left: `${toPercent(currentStart)}%`,
-            width: `${(durationHrs / windowHrs) * 100}%`,
-            top: 2, bottom: 2,
-            background: colors.accent,
-            borderRadius: 6,
-            cursor: dragging ? "grabbing" : "grab",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff", fontSize: 10, fontWeight: 600,
-            overflow: "hidden", whiteSpace: "nowrap",
-            userSelect: "none",
-            zIndex: 3,
-            transition: dragging ? "none" : "left 0.15s ease",
-            boxShadow: dragging ? "0 2px 8px rgba(0,0,0,0.2)" : "0 1px 3px rgba(0,0,0,0.1)",
-          }}
-        >
-          {(durationHrs / windowHrs) > 0.22 && (
-            <span style={{ padding: "0 4px" }}>{formatTimePrecise(currentStart)} {"\u2013"} {formatTimePrecise(currentStart + durationHrs)}</span>
+        {/* Feasible zone */}
+        <div style={{
+          position: "absolute",
+          left: `${toPercent(earliestStart)}%`,
+          width: `${(feasibleHrs / windowHrs) * 100}%`,
+          top: 2, bottom: 2,
+          background: colors.accent,
+          opacity: 0.8,
+          borderRadius: 6,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#fff", fontSize: 10, fontWeight: 600,
+          overflow: "hidden", whiteSpace: "nowrap",
+          userSelect: "none",
+          zIndex: 3,
+        }}>
+          {(feasibleHrs / windowHrs) > 0.22 && (
+            <span style={{ padding: "0 4px" }}>{formatTimePrecise(earliestStart)} {"\u2013"} {formatTimePrecise(latestEnd)}</span>
           )}
         </div>
-        {/* Commute buffer after */}
-        {commuteHrs > 0 && (
+        {/* Left handle (earliest start) */}
+        <div
+          onMouseDown={canDrag ? handleStartDown : undefined}
+          style={{
+            position: "absolute",
+            left: `${toPercent(earliestStart)}%`,
+            width: 8,
+            top: 0, bottom: 0,
+            marginLeft: -1,
+            background: colors.border,
+            borderRadius: "6px 0 0 6px",
+            cursor: canDrag ? (dragTarget === "start" ? "grabbing" : "ew-resize") : "default",
+            zIndex: 5,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: dragTarget ? "none" : "left 0.15s ease",
+          }}
+        >
+          <div style={{ width: 2, height: 12, background: "#fff", borderRadius: 1, opacity: 0.7 }} />
+        </div>
+        {/* Right handle (latest end) */}
+        <div
+          onMouseDown={canDrag ? handleEndDown : undefined}
+          style={{
+            position: "absolute",
+            left: `${toPercent(latestEnd)}%`,
+            width: 8,
+            top: 0, bottom: 0,
+            marginLeft: -7,
+            background: colors.border,
+            borderRadius: "0 6px 6px 0",
+            cursor: canDrag ? (dragTarget === "end" ? "grabbing" : "ew-resize") : "default",
+            zIndex: 5,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: dragTarget ? "none" : "left 0.15s ease",
+          }}
+        >
+          <div style={{ width: 2, height: 12, background: "#fff", borderRadius: 1, opacity: 0.7 }} />
+        </div>
+        {/* Commute buffer after (latest end → window end) */}
+        {commuteAfterHrs > 0.01 && (
           <div style={{
             position: "absolute",
-            left: `${toPercent(currentStart + durationHrs)}%`,
-            width: `${(commuteHrs / windowHrs) * 100}%`,
+            left: `${toPercent(latestEnd)}%`,
+            width: `${((windowEnd - latestEnd) / windowHrs) * 100}%`,
             top: 0, bottom: 0,
             background: colors.accent,
-            opacity: 0.15,
+            opacity: 0.12,
             borderRadius: "0 6px 6px 0",
             zIndex: 2,
           }} />
@@ -1029,7 +1087,8 @@ function TimelineRow({ set, setIndex, colors, duration, commuteMins, gatheringSt
       {/* Time labels */}
       <div style={styles.timelineLabels}>
         <span>{set.timeStart}</span>
-        <span style={{ color: colors.accent, fontWeight: 600 }}>{formatTimePrecise(currentStart)}</span>
+        <span style={{ color: colors.accent, fontWeight: 600 }}>{formatTimePrecise(earliestStart)}</span>
+        <span style={{ color: colors.accent, fontWeight: 600 }}>{formatTimePrecise(latestEnd)}</span>
         <span>{set.timeEnd}</span>
       </div>
     </div>
@@ -1677,9 +1736,9 @@ export default function QuorumSchedulingForm({ onBack }) {
                 <div style={styles.timelineSection}>
                   <div style={styles.timelineSectionLabel}>
                     <ClockIcon />
-                    <span>Availability windows</span>
+                    <span>Arrival & departure</span>
                   </div>
-                  <p style={styles.timelineHint}>Drag the gathering block to position it within each window. Commute buffers adjust based on your travel times above.</p>
+                  <p style={styles.timelineHint}>Set the earliest you can arrive and latest you need to leave. Drag the handles to adjust — commute buffers show suggested travel time.</p>
                   {availSets.map((set, i) => {
                     if (set.dates.length === 0) return null;
                     const colors = SET_COLORS[i % SET_COLORS.length];
@@ -1697,8 +1756,8 @@ export default function QuorumSchedulingForm({ onBack }) {
                         colors={colors}
                         duration={duration}
                         commuteMins={maxCommuteMinutes}
-                        gatheringStart={timelinePositions[set.id]}
-                        onPositionChange={(pos) => setTimelinePositions(prev => ({ ...prev, [set.id]: pos }))}
+                        bounds={timelinePositions[set.id] || null}
+                        onBoundsChange={(b) => setTimelinePositions(prev => ({ ...prev, [set.id]: b }))}
                         busyEvents={allBusy}
                       />
                     );
@@ -1707,7 +1766,7 @@ export default function QuorumSchedulingForm({ onBack }) {
                   <div style={styles.timelineLegend}>
                     <div style={styles.timelineLegendItem}>
                       <div style={{ ...styles.timelineLegendSwatch, background: SET_COLORS[0].accent }} />
-                      <span>Gathering</span>
+                      <span>Available zone</span>
                     </div>
                     <div style={styles.timelineLegendItem}>
                       <div style={{ ...styles.timelineLegendSwatch, background: SET_COLORS[0].accent, opacity: 0.2 }} />

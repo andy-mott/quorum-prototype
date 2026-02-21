@@ -60,14 +60,13 @@ const TIMESLOT_COMMITMENTS = {
 };
 
 // --- Availability windows the host scheduled within ---
-// The host used these windows, applied their commute buffer, and positioned the gathering within.
-// hostCommuteBuffer = the host's commute in minutes (we don't reveal this to invitee,
-// but it narrows the effective window they see)
+// The host defined earliest arrival and latest departure for each window.
+// These bounds already account for the host's commute (the host dragged handles to set them).
 const TIMESLOT_WINDOWS = {
-  "ts-1": { windowStart: "8:00 AM", windowEnd: "2:00 PM", hostCommuteBuffer: 30 },   // Effective: 8:30 AM–1:30 PM, host placed 9–11 AM
-  "ts-2": { windowStart: "8:00 AM", windowEnd: "2:00 PM", hostCommuteBuffer: 30 },
-  "ts-3": { windowStart: "12:00 PM", windowEnd: "6:00 PM", hostCommuteBuffer: 20 },  // Effective: 12:20 PM–5:40 PM, host placed 2–4 PM
-  "ts-4": { windowStart: "12:00 PM", windowEnd: "6:00 PM", hostCommuteBuffer: 20 },
+  "ts-1": { windowStart: "8:00 AM", windowEnd: "2:00 PM", hostEarliestStart: 8.5, hostLatestEnd: 13.5 },   // Host can arrive 8:30 AM, must leave by 1:30 PM
+  "ts-2": { windowStart: "8:00 AM", windowEnd: "2:00 PM", hostEarliestStart: 8.5, hostLatestEnd: 13.5 },
+  "ts-3": { windowStart: "12:00 PM", windowEnd: "6:00 PM", hostEarliestStart: 12.33, hostLatestEnd: 17.67 },  // Host can arrive 12:20 PM, must leave by 5:40 PM
+  "ts-4": { windowStart: "12:00 PM", windowEnd: "6:00 PM", hostEarliestStart: 12.33, hostLatestEnd: 17.67 },
 };
 
 // --- Invitee commute defaults (mock "remembered" from previous events) ---
@@ -133,9 +132,8 @@ function parseTimeToHour(timeStr) {
 function isTimeslotAdjusted(timeslot, adjustedStart, maxCommuteMins) {
   const win = TIMESLOT_WINDOWS[timeslot.id];
   if (!win || adjustedStart == null) return false;
-  const hostCommuteHrs = (win.hostCommuteBuffer || 0) / 60;
-  const effectiveStartHr = parseTimeToHour(win.windowStart) + hostCommuteHrs;
-  const effectiveEndHr = parseTimeToHour(win.windowEnd) - hostCommuteHrs;
+  const effectiveStartHr = win.hostEarliestStart;
+  const effectiveEndHr = win.hostLatestEnd;
   const durationHrs = MOCK_GATHERING.duration / 60;
   const commuteHrs = maxCommuteMins / 60;
   const minStart = effectiveStartHr + commuteHrs;
@@ -545,10 +543,9 @@ function InviteeTimeline({ timeslot, inviteeCommuteMins, adjustedStart, onPositi
   const win = TIMESLOT_WINDOWS[timeslot.id];
   if (!win) return null;
 
-  // Effective window = host's window narrowed by host's commute buffer
-  const hostCommuteHrs = (win.hostCommuteBuffer || 0) / 60;
-  const effectiveStartHr = parseTimeToHour(win.windowStart) + hostCommuteHrs;
-  const effectiveEndHr = parseTimeToHour(win.windowEnd) - hostCommuteHrs;
+  // Effective window = host's earliest arrival to latest departure
+  const effectiveStartHr = win.hostEarliestStart;
+  const effectiveEndHr = win.hostLatestEnd;
   const effectiveHrs = effectiveEndHr - effectiveStartHr;
   const durationHrs = MOCK_GATHERING.duration / 60;
   const commuteHrs = inviteeCommuteMins / 60;
