@@ -1,7 +1,7 @@
 import { Suspense, lazy, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { COLORS, GRADIENTS, FONTS } from "../shared/styles";
-import EXPERIENCES from "../experiences/manifest";
+import EXPERIENCES, { APPS } from "../experiences/manifest";
 
 const BackArrow = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -24,17 +24,18 @@ function NotFound() {
     <div style={shellStyles.loadingContainer}>
       <p style={shellStyles.notFoundText}>Experience not found</p>
       <button onClick={() => navigate("/")} style={shellStyles.notFoundBtn}>
-        Back to Catalog
+        Back to Platopia
       </button>
     </div>
   );
 }
 
 export default function ExperienceShell() {
-  const { id } = useParams();
+  const { appId, expId } = useParams();
   const navigate = useNavigate();
 
-  const experience = EXPERIENCES.find((e) => e.id === id);
+  const app = APPS.find((a) => a.id === appId);
+  const experience = EXPERIENCES.find((e) => e.id === expId && e.app === appId);
 
   const LazyComponent = useMemo(() => {
     if (!experience) return null;
@@ -45,20 +46,23 @@ export default function ExperienceShell() {
     return <NotFound />;
   }
 
+  const backPath = `/app/${appId}`;
+  const backLabel = app ? `Back to ${app.name}` : "Back";
+
   return (
     <div style={shellStyles.wrapper}>
       <div style={shellStyles.backBar}>
         <button
-          onClick={() => navigate("/")}
+          onClick={() => navigate(backPath)}
           style={shellStyles.backBtn}
         >
           <BackArrow />
-          <span>Back to Catalog</span>
+          <span>{backLabel}</span>
         </button>
       </div>
 
       <Suspense fallback={<LoadingFallback />}>
-        <LazyComponent onBack={() => navigate("/")} />
+        <LazyComponent onBack={() => navigate(backPath)} />
       </Suspense>
     </div>
   );

@@ -1,33 +1,36 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { COLORS, GRADIENTS, FONTS } from "../shared/styles";
-import EXPERIENCES, { CATEGORIES } from "../experiences/manifest";
+import { APPS } from "../experiences/manifest";
 
-function ExperienceCard({ experience, onClick }) {
+function AppCard({ app, onClick }) {
   const [hovered, setHovered] = useState(false);
-  const isActive = experience.status === "active";
-  const Icon = experience.icon;
+  const isActive = app.status === "active";
+  const Icon = app.icon;
 
   return (
     <button
-      onClick={() => isActive && onClick(experience.id)}
+      onClick={() => isActive && onClick(app.id)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        ...styles.expCard,
-        ...(isActive ? styles.expCardActive : styles.expCardDisabled),
-        ...(isActive && hovered ? styles.expCardHover : {}),
+        ...styles.appCard,
+        ...(isActive ? styles.appCardActive : styles.appCardDisabled),
+        ...(isActive && hovered ? styles.appCardHover : {}),
       }}
     >
-      <div style={styles.expIconWrap}>
-        <Icon />
+      <div style={styles.appIconWrap}>
+        {Icon ? <Icon /> : <span style={styles.appIconPlaceholder}>?</span>}
       </div>
-      <h3 style={{ ...styles.expTitle, ...(isActive ? {} : styles.expTitleDisabled) }}>
-        {experience.title}
-      </h3>
-      <p style={styles.expDesc}>{experience.description}</p>
-      <div style={{ ...styles.expBadge, ...(isActive ? styles.expBadgeActive : styles.expBadgeSoon) }}>
-        <div style={{ ...styles.expBadgeDot, background: isActive ? COLORS.greenLight : COLORS.textLight }} />
+      <div style={styles.appCardBody}>
+        <h3 style={{ ...styles.appName, ...(isActive ? {} : styles.appNameDisabled) }}>
+          {app.name}
+        </h3>
+        <p style={styles.appTagline}>{app.tagline}</p>
+        <p style={styles.appDesc}>{app.description}</p>
+      </div>
+      <div style={{ ...styles.appBadge, ...(isActive ? styles.appBadgeActive : styles.appBadgeSoon) }}>
+        <div style={{ ...styles.appBadgeDot, background: isActive ? COLORS.greenLight : COLORS.textLight }} />
         {isActive ? "Active" : "Coming Soon"}
       </div>
     </button>
@@ -37,14 +40,9 @@ function ExperienceCard({ experience, onClick }) {
 export default function Catalog() {
   const navigate = useNavigate();
 
-  const handleSelect = (id) => {
-    navigate(`/experience/${id}`);
+  const handleSelect = (appId) => {
+    navigate(`/app/${appId}`);
   };
-
-  const grouped = CATEGORIES.map((cat) => ({
-    ...cat,
-    experiences: EXPERIENCES.filter((exp) => exp.category === cat.id),
-  })).filter((cat) => cat.experiences.length > 0);
 
   return (
     <div style={styles.container}>
@@ -54,30 +52,25 @@ export default function Catalog() {
             <div style={styles.logo}>P</div>
             <span style={styles.logoText}>Platopia</span>
           </div>
-          <h1 style={styles.landingTitle}>Prototype Experiences</h1>
+          <h1 style={styles.landingTitle}>Prototype Platform</h1>
           <p style={styles.landingDesc}>
-            Explore the interactive concepts behind Platopia — a smart platform for organizing group gatherings.
+            A collection of apps for organizing group experiences — from scheduling to content discovery.
           </p>
         </div>
 
-        {grouped.map((cat) => (
-          <div key={cat.id} style={styles.categorySection}>
-            <div style={styles.categoryHeader}>
-              <h2 style={styles.categoryTitle}>{cat.label}</h2>
-              <p style={styles.categoryDesc}>{cat.description}</p>
-            </div>
-            <div style={styles.expGrid}>
-              {cat.experiences.map((exp) => (
-                <ExperienceCard key={exp.id} experience={exp} onClick={handleSelect} />
-              ))}
-            </div>
-          </div>
-        ))}
+        <div style={styles.sectionHeader}>
+          <h2 style={styles.sectionTitle}>Apps</h2>
+        </div>
+
+        <div style={styles.appGrid}>
+          {APPS.map((app) => (
+            <AppCard key={app.id} app={app} onClick={handleSelect} />
+          ))}
+        </div>
 
         <div style={styles.footer}>
           <p style={styles.footerText}>
-            Built to illustrate Platopia's core mechanics: quorum-based confirmation,
-            locations as participants, and availability set matching.
+            Each app is a self-contained prototype exploring a different facet of the Platopia platform.
           </p>
         </div>
       </div>
@@ -144,31 +137,23 @@ const styles = {
     maxWidth: 480,
     margin: "0 auto",
   },
-  categorySection: {
-    marginBottom: 36,
-  },
-  categoryHeader: {
+  sectionHeader: {
     marginBottom: 16,
   },
-  categoryTitle: {
+  sectionTitle: {
     fontSize: 14,
     fontWeight: 700,
     color: "rgba(255,255,255,0.5)",
     textTransform: "uppercase",
     letterSpacing: 1.2,
-    margin: "0 0 4px",
-  },
-  categoryDesc: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.3)",
     margin: 0,
   },
-  expGrid: {
+  appGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
     gap: 20,
   },
-  expCard: {
+  appCard: {
     display: "flex",
     flexDirection: "column",
     alignItems: "flex-start",
@@ -181,23 +166,23 @@ const styles = {
     cursor: "pointer",
     minHeight: 200,
   },
-  expCardActive: {
+  appCardActive: {
     background: "#fff",
     borderColor: "#e0e5eb",
     boxShadow: "0 8px 32px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.05)",
   },
-  expCardHover: {
+  appCardHover: {
     transform: "translateY(-3px)",
     boxShadow: "0 16px 48px rgba(0,0,0,0.25), 0 0 0 1px rgba(46,134,193,0.2)",
     borderColor: COLORS.blueLight,
   },
-  expCardDisabled: {
+  appCardDisabled: {
     background: "rgba(255,255,255,0.06)",
     borderColor: "rgba(255,255,255,0.1)",
     cursor: "default",
     opacity: 0.7,
   },
-  expIconWrap: {
+  appIconWrap: {
     width: 52,
     height: 52,
     borderRadius: 14,
@@ -207,24 +192,38 @@ const styles = {
     justifyContent: "center",
     marginBottom: 16,
   },
-  expTitle: {
-    fontSize: 17,
+  appIconPlaceholder: {
+    fontSize: 22,
+    fontWeight: 700,
+    color: COLORS.blueLight,
+  },
+  appCardBody: {
+    flex: 1,
+    marginBottom: 16,
+  },
+  appName: {
+    fontSize: 19,
     fontWeight: 700,
     color: COLORS.text,
-    margin: "0 0 8px",
+    margin: "0 0 4px",
     letterSpacing: -0.2,
   },
-  expTitleDisabled: {
+  appNameDisabled: {
     color: "rgba(255,255,255,0.6)",
   },
-  expDesc: {
+  appTagline: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: COLORS.blueLight,
+    margin: "0 0 10px",
+  },
+  appDesc: {
     fontSize: 14,
     color: COLORS.textMuted,
     lineHeight: 1.55,
-    margin: "0 0 16px",
-    flex: 1,
+    margin: 0,
   },
-  expBadge: {
+  appBadge: {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
@@ -233,15 +232,15 @@ const styles = {
     fontSize: 12,
     fontWeight: 600,
   },
-  expBadgeActive: {
+  appBadgeActive: {
     background: "#e8f5e9",
     color: COLORS.greenLight,
   },
-  expBadgeSoon: {
+  appBadgeSoon: {
     background: "rgba(255,255,255,0.08)",
     color: "rgba(255,255,255,0.5)",
   },
-  expBadgeDot: {
+  appBadgeDot: {
     width: 7,
     height: 7,
     borderRadius: "50%",

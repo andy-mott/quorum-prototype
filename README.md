@@ -1,6 +1,11 @@
 # Platopia
 
-A smart scheduling platform for organizing group gatherings, built as a manifest-driven experience catalog.
+A platform for organizing group experiences, built as a manifest-driven app catalog with lazy-loaded prototype experiences.
+
+## Apps
+
+- **Quorum** — Smart group scheduling with quorum-based confirmation, location matching, and overflow support
+- **Trellis** — Content discovery *(coming soon)*
 
 ## Project Structure
 
@@ -9,8 +14,8 @@ platopia-prototype/
 ├── CLAUDE.md                          # Context file for Claude Code sessions
 ├── README.md                          # This file
 ├── docs/
-│   ├── user-journey.md                # Full user journey (v2)
-│   └── elevator-pitch.md             # Product pitch with differentiators
+│   ├── user-journey.md                # Quorum user journey (v2)
+│   └── elevator-pitch.md             # Quorum product pitch
 ├── diagrams/
 │   ├── detailed-flow.mermaid          # Detailed Mermaid flowchart (LR)
 │   └── high-level-flow.mermaid        # Simplified high-level flow (LR)
@@ -20,10 +25,11 @@ platopia-prototype/
     │   ├── styles.js                  # Brand constants (COLORS, GRADIENTS, FONTS)
     │   └── icons.jsx                  # SVG icon components
     ├── catalog/
-    │   ├── Catalog.jsx                # Browsable grid grouped by category
+    │   ├── Catalog.jsx                # Platform landing (app cards)
+    │   ├── AppPage.jsx                # App page (experience list)
     │   └── ExperienceShell.jsx        # Route wrapper (back bar + Suspense)
     └── experiences/
-        ├── manifest.js                # Central registry with lazy imports
+        ├── manifest.js                # Central registry (APPS + EXPERIENCES)
         └── scheduling/
             ├── HostSchedulingForm.jsx
             ├── InviteeExperience.jsx
@@ -37,7 +43,15 @@ platopia-prototype/
 2. `npm run dev`
 3. Open `http://localhost:5173`
 
-## Key Concepts
+## Navigation
+
+```
+/                          → Platform catalog (app cards)
+/app/quorum                → Quorum app (scheduling experiences)
+/app/quorum/host-combined  → Individual experience
+```
+
+## Key Concepts (Quorum)
 
 - **Quorum** — minimum attendees needed to confirm a gathering
 - **Availability sets** — groups of dates paired with time windows

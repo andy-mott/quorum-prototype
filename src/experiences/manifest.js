@@ -10,7 +10,7 @@ const EXPERIENCES = [
     id: "host-scheduling",
     title: "Host Scheduling Form",
     description: "Create and configure a group gathering with smart multi-dimensional scheduling across people, times, and places.",
-    category: "scheduling",
+    app: "quorum",
     icon: CalendarIcon,
     status: "active",
     load: () => import("./scheduling/HostSchedulingForm.jsx"),
@@ -19,7 +19,7 @@ const EXPERIENCES = [
     id: "invitee-response",
     title: "Invitee Response",
     description: "Respond to a gathering invite by ranking your top preferences and marking times you're unavailable.",
-    category: "scheduling",
+    app: "quorum",
     icon: EnvelopeIcon,
     status: "active",
     load: () => import("./scheduling/InviteeExperience.jsx"),
@@ -28,7 +28,7 @@ const EXPERIENCES = [
     id: "invitee-calendar",
     title: "Invitee Calendar View",
     description: "Respond to a gathering invite using an interactive calendar that shows available days and lets you pick specific time slots.",
-    category: "scheduling",
+    app: "quorum",
     icon: CalendarClockIcon,
     status: "active",
     load: () => import("./scheduling/InviteeCalendarExperience.jsx"),
@@ -37,17 +37,30 @@ const EXPERIENCES = [
     id: "host-combined",
     title: "Host Combined Form",
     description: "Create a gathering with schedule, location, and commute buffer combined into a single streamlined step.",
-    category: "scheduling",
+    app: "quorum",
     icon: CombinedFormIcon,
     status: "active",
     load: () => import("./scheduling/HostCombinedForm.jsx"),
   },
 ];
 
-export const CATEGORIES = [
-  { id: "scheduling", label: "Scheduling", description: "Smart group scheduling experiences" },
-  { id: "messaging", label: "Messaging", description: "Communication and notification flows" },
-  { id: "social", label: "Social", description: "Social interaction experiences" },
+export const APPS = [
+  {
+    id: "quorum",
+    name: "Quorum",
+    tagline: "Smart group scheduling",
+    description: "Organize gatherings with quorum-based confirmation, location matching, and overflow support.",
+    icon: CalendarClockIcon,
+    status: "active",
+  },
+  {
+    id: "trellis",
+    name: "Trellis",
+    tagline: "Content discovery",
+    description: "Surface and share interesting content with your community.",
+    icon: null,
+    status: "coming_soon",
+  },
 ];
 
 export default EXPERIENCES;

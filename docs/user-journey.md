@@ -1,10 +1,12 @@
-# Platopia — User Journey (Draft v2)
+# Quorum — User Journey (Draft v2)
 
 ## Overview
 
-Platopia simplifies the process of organizing group gatherings by combining three core elements into one seamless flow: **event description**, **collaborative scheduling**, and **confirmation & booking**.
+Quorum simplifies the process of organizing group gatherings by combining three core elements into one seamless flow: **event description**, **collaborative scheduling**, and **confirmation & booking**.
 
-A key design principle is that **locations are treated like participants** — they have their own availability, and Platopia matches people, times, and places together automatically.
+A key design principle is that **locations are treated like participants** — they have their own availability, and Quorum matches people, times, and places together automatically.
+
+Quorum is part of the Platopia platform — a collection of apps for organizing group experiences.
 
 ---
 
@@ -29,7 +31,7 @@ The host begins by creating a draft gathering with the following basics:
 The host specifies how long the gathering needs to be (e.g., 90 minutes). This anchors all scheduling and location matching.
 
 ### Step 2 — Indicate potential locations
-The host selects from available locations. Each location in Platopia maintains its own availability data, so the system already knows when rooms or spaces are open.
+The host selects from available locations. Each location in Quorum maintains its own availability data, so the system already knows when rooms or spaces are open.
 
 > **Current scope:** The system maintains availability for two specific locations.
 >
@@ -46,8 +48,8 @@ The experience varies by event type:
 | **Recurring series** | Host defines a cadence (e.g., "2nd and 4th Thursdays of each month") |
 | **Limited series** | Host defines a frequency over a set period (e.g., "twice in the next two weeks") |
 
-### Step 4 — Platopia generates matched options
-Platopia cross-references the host's time preferences with location availability to produce a set of **viable options** — combinations of date, time, and location that actually work. The host reviews and can remove any options before publishing.
+### Step 4 — Quorum generates matched options
+Quorum cross-references the host's time preferences with location availability to produce a set of **viable options** — combinations of date, time, and location that actually work. The host reviews and can remove any options before publishing.
 
 ### Step 5 — Publish
 The host publishes the gathering, making it available to invitees.
@@ -99,7 +101,7 @@ If the host indicated they are **open to multiple gatherings**:
 - Adding new options post-publish is a potential future enhancement
 
 ### Location booking (future)
-- Once a gathering is locked in, Platopia can **automatically book the confirmed location** (e.g., reserving a library meeting room via agentic AI)
+- Once a gathering is locked in, Quorum can **automatically book the confirmed location** (e.g., reserving a library meeting room via agentic AI)
 
 ---
 
@@ -110,7 +112,7 @@ Host creates draft gathering (title, description, format, quorum/capacity)
         ↓
 Host sets duration → indicates locations → defines time preferences
         ↓
-Platopia matches host times with location availability → generates viable options
+Quorum matches host times with location availability → generates viable options
         ↓
 Host reviews options → publishes gathering → invitees notified
         ↓
@@ -130,7 +132,7 @@ Overflow invitees select from remaining slots → new quorum → new gathering c
 
 ## Key Design Principle: Locations as Participants
 
-Locations in Platopia are not static fields — they behave like invitees with their own availability. This means:
+Locations in Quorum are not static fields — they behave like invitees with their own availability. This means:
 
 - The system knows when a location is free before presenting it as an option
 - Matching is three-dimensional: **people × times × places**
