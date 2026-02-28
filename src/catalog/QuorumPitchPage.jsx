@@ -170,6 +170,42 @@ export default function QuorumPitchPage() {
         </div>
       </section>
 
+      {/* ─── B2. Our Approach ─── */}
+      <section style={styles.section}>
+        <div style={styles.sectionInner}>
+          <div style={styles.approachCard}>
+            <h2 style={styles.approachHeading}>
+              Simple for everyone, no matter the complexity
+            </h2>
+            <p style={styles.approachText}>
+              Whether it's a quick meetup that fills up on any day, or distributing 200 people from
+              multiple time zones into 15 different limited series — virtual, in-person, or hybrid — the
+              experience stays frictionless.
+            </p>
+            <p style={styles.approachText}>
+              We require minimum input through intuitive interfaces and abstract the complexity
+              through smart code and AI-enabled scheduling.
+            </p>
+            <div style={styles.approachScale}>
+              <div style={styles.scaleEnd}>
+                <span style={styles.scaleLabel}>Simple</span>
+                <span style={styles.scaleExample}>A quick team meetup</span>
+              </div>
+              <div style={styles.scaleLine}>
+                <div style={styles.scaleArrow} />
+              </div>
+              <div style={{ ...styles.scaleEnd, textAlign: "right" }}>
+                <span style={styles.scaleLabel}>Complex</span>
+                <span style={styles.scaleExample}>200 people · 15 series · 5 time zones</span>
+              </div>
+            </div>
+            <p style={styles.approachPunchline}>
+              Same effortless experience for hosts and participants at every scale.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ─── C. The Solution ─── */}
       <section style={styles.section}>
         <div style={styles.sectionInner}>
@@ -199,6 +235,42 @@ export default function QuorumPitchPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── D2. Where This Is Going ─── */}
+      <section style={styles.section}>
+        <div style={styles.sectionInner}>
+          <h2 style={styles.sectionHeading}>Where this is going</h2>
+          <div style={styles.visionCard}>
+            <div style={styles.visionRow}>
+              <div style={styles.visionIcon}>
+                <LocationMatchIcon />
+              </div>
+              <div style={styles.visionContent}>
+                <h3 style={styles.visionTitle}>Automatic space discovery and booking</h3>
+                <p style={styles.visionText}>
+                  Quorum will discover and book available spaces automatically — starting with
+                  public resources like library meeting rooms, where every branch uses different
+                  scheduling software. Our agentic AI handles the complexity of navigating each
+                  system so the host doesn't have to.
+                </p>
+              </div>
+            </div>
+            <div style={styles.visionRow}>
+              <div style={styles.visionIcon}>
+                <QuorumCheckIcon />
+              </div>
+              <div style={styles.visionContent}>
+                <h3 style={styles.visionTitle}>AI-powered scheduling intelligence</h3>
+                <p style={styles.visionText}>
+                  As complexity grows — more people, more time zones, more constraints — the
+                  scheduling engine gets smarter. AI optimizes slot selection, predicts attendance
+                  patterns, and suggests configurations that maximize participation.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -445,6 +517,116 @@ const styles = {
     fontSize: 15,
     color: "rgba(255,255,255,0.75)",
     lineHeight: 1.5,
+    margin: 0,
+  },
+
+  // Approach
+  approachCard: {
+    background: "rgba(46,134,193,0.06)",
+    border: "1.5px solid rgba(46,134,193,0.2)",
+    borderRadius: 18,
+    padding: "32px 28px",
+  },
+  approachHeading: {
+    fontSize: 22,
+    fontWeight: 700,
+    color: "#fff",
+    margin: "0 0 16px",
+    letterSpacing: -0.3,
+  },
+  approachText: {
+    fontSize: 15,
+    color: "rgba(255,255,255,0.65)",
+    lineHeight: 1.65,
+    margin: "0 0 12px",
+  },
+  approachScale: {
+    display: "flex",
+    alignItems: "center",
+    gap: 0,
+    margin: "24px 0 20px",
+    padding: "16px 20px",
+    background: "rgba(255,255,255,0.04)",
+    borderRadius: 12,
+  },
+  scaleEnd: {
+    flex: "0 0 auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+  },
+  scaleLabel: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: COLORS.blueLight,
+  },
+  scaleExample: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.4)",
+  },
+  scaleLine: {
+    flex: 1,
+    height: 2,
+    background: "linear-gradient(90deg, rgba(46,134,193,0.2), rgba(46,134,193,0.5), rgba(46,134,193,0.2))",
+    margin: "0 16px",
+    position: "relative",
+  },
+  scaleArrow: {
+    position: "absolute",
+    right: -4,
+    top: -4,
+    width: 10,
+    height: 10,
+    borderRight: "2px solid rgba(46,134,193,0.5)",
+    borderTop: "2px solid rgba(46,134,193,0.5)",
+    transform: "rotate(45deg)",
+  },
+  approachPunchline: {
+    fontSize: 15,
+    fontWeight: 600,
+    color: COLORS.blueLight,
+    margin: 0,
+    textAlign: "center",
+  },
+
+  // Vision
+  visionCard: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+    marginTop: 16,
+  },
+  visionRow: {
+    display: "flex",
+    gap: 16,
+    padding: "20px 22px",
+    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: 14,
+  },
+  visionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    background: "rgba(46,134,193,0.12)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  visionContent: {
+    flex: 1,
+  },
+  visionTitle: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: "#fff",
+    margin: "0 0 6px",
+  },
+  visionText: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.5)",
+    lineHeight: 1.55,
     margin: 0,
   },
 
