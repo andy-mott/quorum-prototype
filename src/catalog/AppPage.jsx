@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { COLORS, GRADIENTS, FONTS } from "../shared/styles";
 import EXPERIENCES, { APPS } from "../experiences/manifest";
+
+const QuorumPitchPage = lazy(() => import("./QuorumPitchPage"));
 
 const BackArrow = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -55,6 +57,15 @@ function NotFound() {
 export default function AppPage() {
   const { appId } = useParams();
   const navigate = useNavigate();
+
+  // Quorum gets a dedicated pitch page
+  if (appId === "quorum") {
+    return (
+      <Suspense fallback={<div style={styles.container} />}>
+        <QuorumPitchPage />
+      </Suspense>
+    );
+  }
 
   const app = APPS.find((a) => a.id === appId);
 

@@ -53,6 +53,44 @@ export const SimulationIcon = () => (
   </svg>
 );
 
+// Pitch page feature icons
+export const QuorumCheckIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <circle cx="16" cy="16" r="12" stroke={COLORS.blueLight} strokeWidth="2.5" fill="none"/>
+    <path d="M10 16.5L14 20.5L22 12.5" stroke={COLORS.blueLight} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="7" cy="10" r="2" fill={COLORS.blueLight} opacity="0.4"/>
+    <circle cx="25" cy="10" r="2" fill={COLORS.blueLight} opacity="0.4"/>
+    <circle cx="7" cy="22" r="2" fill={COLORS.blueLight} opacity="0.4"/>
+    <circle cx="25" cy="22" r="2" fill={COLORS.blueLight} opacity="0.4"/>
+  </svg>
+);
+
+export const LocationMatchIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <path d="M12 4C8.7 4 6 6.7 6 10C6 14.5 12 21 12 21S18 14.5 18 10C18 6.7 15.3 4 12 4Z" stroke={COLORS.blueLight} strokeWidth="2" fill="none"/>
+    <circle cx="12" cy="10" r="2" stroke={COLORS.blueLight} strokeWidth="1.5" fill="none"/>
+    <circle cx="22" cy="14" r="2.5" stroke={COLORS.blueLight} strokeWidth="1.5" fill="none"/>
+    <circle cx="22" cy="22" r="2.5" stroke={COLORS.blueLight} strokeWidth="1.5" fill="none"/>
+    <path d="M18 10H19.5" stroke={COLORS.blueLight} strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 2"/>
+    <path d="M14 18L19.5 14" stroke={COLORS.blueLight} strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 2"/>
+    <path d="M14 20L19.5 22" stroke={COLORS.blueLight} strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 2"/>
+  </svg>
+);
+
+export const OverflowIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <rect x="4" y="8" width="11" height="16" rx="3" stroke={COLORS.blueLight} strokeWidth="2" fill="none"/>
+    <rect x="17" y="8" width="11" height="16" rx="3" stroke={COLORS.blueLight} strokeWidth="2" fill="none"/>
+    <path d="M9.5 14V18" stroke={COLORS.blueLight} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M7.5 16H11.5" stroke={COLORS.blueLight} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M22.5 14V18" stroke={COLORS.blueLight} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M20.5 16H24.5" stroke={COLORS.blueLight} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M15 12L17 12" stroke={COLORS.blueLight} strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
+    <path d="M15 16L17 16" stroke={COLORS.blueLight} strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
+    <path d="M15 20L17 20" stroke={COLORS.blueLight} strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
+  </svg>
+);
+
 export const CombinedFormIcon = () => (
   <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
     <rect x="4" y="6" width="24" height="22" rx="4" stroke={COLORS.blueLight} strokeWidth="2.5" fill="none"/>
