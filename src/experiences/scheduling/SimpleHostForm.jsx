@@ -31,6 +31,89 @@ for (let h = 6; h <= 23; h += 0.5) {
   TIME_OPTIONS.push(h);
 }
 
+// ── Mock Location Data ──────────────────────────────────────
+
+const LOCATIONS = [
+  { id: "loc1", name: "Community Center — Room A", address: "142 Main St", capacity: 40 },
+  { id: "loc2", name: "Downtown Library — Meeting Room 3", address: "88 Elm Ave", capacity: 30 },
+  { id: "loc3", name: "The Hive Coworking — Event Space", address: "310 Oak Blvd", capacity: 25 },
+  { id: "loc4", name: "Riverside Park Pavilion", address: "45 River Rd", capacity: 60 },
+  { id: "loc5", name: "St. Mark's Parish Hall", address: "220 Church St", capacity: 50 },
+];
+
+const LOCATION_EVENTS = {
+  loc1: {
+    recurring: [
+      { dayOfWeek: 1, start: 9, end: 11, title: "Yoga class" },
+      { dayOfWeek: 1, start: 14, end: 16, title: "Senior social" },
+      { dayOfWeek: 3, start: 10, end: 12, title: "Art workshop" },
+      { dayOfWeek: 3, start: 13, end: 15, title: "Community meeting" },
+      { dayOfWeek: 5, start: 9, end: 10.5, title: "Pilates" },
+      { dayOfWeek: 5, start: 18, end: 20, title: "Dance class" },
+      { dayOfWeek: 6, start: 10, end: 14, title: "Kids program" },
+    ],
+    oneOff: [
+      { daysFromNow: 3, start: 11, end: 15, title: "Private event" },
+      { daysFromNow: 8, start: 9, end: 17, title: "All-day booking" },
+      { daysFromNow: 14, start: 13, end: 16, title: "Workshop rental" },
+    ],
+  },
+  loc2: {
+    recurring: [
+      { dayOfWeek: 1, start: 10, end: 11.5, title: "Book club" },
+      { dayOfWeek: 2, start: 14, end: 16, title: "Tutoring session" },
+      { dayOfWeek: 2, start: 17, end: 19, title: "ESL class" },
+      { dayOfWeek: 4, start: 10, end: 12, title: "Writer's group" },
+      { dayOfWeek: 4, start: 15, end: 17, title: "Study group" },
+      { dayOfWeek: 6, start: 11, end: 13, title: "Story time" },
+    ],
+    oneOff: [
+      { daysFromNow: 2, start: 9, end: 12, title: "Staff training" },
+      { daysFromNow: 5, start: 13, end: 17, title: "Author reading" },
+      { daysFromNow: 10, start: 9, end: 17, title: "Maintenance" },
+    ],
+  },
+  loc3: {
+    recurring: [
+      { dayOfWeek: 1, start: 8, end: 10, title: "Team standup room" },
+      { dayOfWeek: 2, start: 13, end: 15, title: "Networking lunch" },
+      { dayOfWeek: 4, start: 16, end: 18, title: "Founder meetup" },
+    ],
+    oneOff: [
+      { daysFromNow: 4, start: 10, end: 16, title: "Product launch" },
+      { daysFromNow: 12, start: 9, end: 12, title: "Corporate offsite" },
+    ],
+  },
+  loc4: {
+    recurring: [
+      { dayOfWeek: 6, start: 8, end: 12, title: "Farmers market" },
+      { dayOfWeek: 0, start: 9, end: 11, title: "Morning run club" },
+    ],
+    oneOff: [
+      { daysFromNow: 7, start: 10, end: 18, title: "Community fair" },
+      { daysFromNow: 15, start: 14, end: 17, title: "Outdoor concert setup" },
+    ],
+  },
+  loc5: {
+    recurring: [
+      { dayOfWeek: 0, start: 9, end: 12, title: "Sunday service" },
+      { dayOfWeek: 3, start: 18, end: 20, title: "Choir practice" },
+      { dayOfWeek: 5, start: 10, end: 12, title: "Seniors group" },
+    ],
+    oneOff: [
+      { daysFromNow: 6, start: 9, end: 17, title: "Fundraiser" },
+      { daysFromNow: 20, start: 14, end: 18, title: "Community dinner prep" },
+    ],
+  },
+};
+
+const USER_PROFILE = {
+  preferredLocations: ["loc1", "loc3"],
+  startingLocation: "Home — 55 Maple Dr",
+};
+
+const COMMUTE_DEFAULTS = { loc1: 15, loc2: 22, loc3: 10, loc4: 35, loc5: 28 };
+
 // ── Mock Google Calendar data ───────────────────────────────
 
 const MOCK_EVENTS_WEEKDAY = [
@@ -121,11 +204,7 @@ function getFreeGaps(events, windowStart, windowEnd) {
 function getTimeWindow(timePref, timeOverrides = {}) {
   if (timePref.length === 0) return null;
   if (timePref.includes("flexible")) return { start: 8, end: 21, label: "Based on your calendar" };
-  if (timePref.includes("custom")) {
-    const c = timeOverrides.custom || TIME_DEFAULTS.custom;
-    return { start: c.start, end: c.end, label: `${formatHour(c.start)} \u2014 ${formatHour(c.end)}` };
-  }
-
+  // Merge all selected windows (morning, afternoon, evening, custom)
   let minStart = 24, maxEnd = 0;
   for (const pref of timePref) {
     const w = timeOverrides[pref] || TIME_DEFAULTS[pref];
@@ -139,6 +218,67 @@ function getTimeWindow(timePref, timeOverrides = {}) {
     end: maxEnd,
     label: `${formatHour(minStart)} \u2014 ${formatHour(maxEnd)}`,
   };
+}
+
+// ── Location Availability ────────────────────────────────────
+
+function getLocationEventsForDate(locationId, dateKey) {
+  const config = LOCATION_EVENTS[locationId];
+  if (!config) return [];
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = dt.getDay();
+  const events = [];
+  for (const ev of config.recurring) {
+    if (ev.dayOfWeek === dow) events.push({ start: ev.start, end: ev.end, title: ev.title });
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (const ev of config.oneOff) {
+    const evDate = new Date(today);
+    evDate.setDate(today.getDate() + ev.daysFromNow);
+    const evKey = `${evDate.getFullYear()}-${String(evDate.getMonth() + 1).padStart(2, "0")}-${String(evDate.getDate()).padStart(2, "0")}`;
+    if (evKey === dateKey) events.push({ start: ev.start, end: ev.end, title: ev.title });
+  }
+  return events;
+}
+
+function getLocationDateAvailability(locationId, dateKey, durationMinutes, windowStart, windowEnd) {
+  const events = getLocationEventsForDate(locationId, dateKey);
+  const gaps = getFreeGaps(events, windowStart, windowEnd);
+  const durationHours = durationMinutes / 60;
+  const totalFreeHours = gaps.reduce((sum, g) => sum + (g.end - g.start), 0);
+  const windowHours = windowEnd - windowStart;
+  const fullyFree = totalFreeHours >= windowHours - 0.01;
+  const fitsOnce = gaps.some((g) => g.end - g.start >= durationHours);
+  if (fullyFree) return "green";
+  if (fitsOnce) return "amber";
+  return "red";
+}
+
+function getLocationOverallAvailability(locationId, selectedDates, durationMinutes, windowStart, windowEnd) {
+  if (selectedDates.length === 0) return { level: null, perDate: [] };
+  const perDate = selectedDates.map((dateKey) => ({
+    dateKey,
+    level: getLocationDateAvailability(locationId, dateKey, durationMinutes, windowStart, windowEnd),
+  }));
+  const greenCount = perDate.filter((d) => d.level === "green").length;
+  const amberCount = perDate.filter((d) => d.level === "amber").length;
+  let level;
+  if (greenCount === perDate.length) level = "green";
+  else if (greenCount + amberCount > 0) level = "amber";
+  else level = "red";
+  return { level, perDate };
+}
+
+function scoreLocation(overallLevel, isPreferred, commuteMinutes) {
+  const availScore = overallLevel === "green" ? 300
+    : overallLevel === "amber" ? 200
+    : overallLevel === "red" ? 100
+    : 150;
+  const prefScore = isPreferred ? 10 : 0;
+  const commuteScore = Math.max(0, 5 - (commuteMinutes / 12));
+  return availScore + prefScore + commuteScore;
 }
 
 function getDayAvailabilityInfo(dateKey, durationMinutes, startHr, endHr) {
@@ -375,6 +515,113 @@ function MiniCalendar({ selectedDates, onToggleDate, duration, timePref, timeOve
   );
 }
 
+// ── Location Icons & Sub-Components ─────────────────────────
+
+function MapPinIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M7 12.5C7 12.5 11.5 9 11.5 5.5C11.5 3.01 9.49 1 7 1C4.51 1 2.5 3.01 2.5 5.5C2.5 9 7 12.5 7 12.5Z" stroke="currentColor" strokeWidth="1.2"/>
+      <circle cx="7" cy="5.5" r="1.8" stroke="currentColor" strokeWidth="1.1"/>
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+      <path d="M5 0.5L6.1 3.6H9.5L6.7 5.5L7.8 8.6L5 6.7L2.2 8.6L3.3 5.5L0.5 3.6H3.9L5 0.5Z"/>
+    </svg>
+  );
+}
+
+function CommuteIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+      <path d="M2.5 9.5H11.5V7L10 4H4L2.5 7V9.5Z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
+      <path d="M2.5 7H11.5" stroke="currentColor" strokeWidth="1"/>
+      <circle cx="4.5" cy="8.5" r="0.6" fill="currentColor"/>
+      <circle cx="9.5" cy="8.5" r="0.6" fill="currentColor"/>
+    </svg>
+  );
+}
+
+function DirectionsIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+      <path d="M6.7 1.3L10.7 5.3C11.1 5.7 11.1 6.3 10.7 6.7L6.7 10.7C6.3 11.1 5.7 11.1 5.3 10.7L1.3 6.7C0.9 6.3 0.9 5.7 1.3 5.3L5.3 1.3C5.7 0.9 6.3 0.9 6.7 1.3Z" stroke="currentColor" strokeWidth="1.1"/>
+      <path d="M4.5 6.5L6 5L7.5 6.5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M6 5V8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+function DirectionsLink({ address }) {
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      style={styles.directionsLink}
+    >
+      <DirectionsIcon /> Directions
+    </a>
+  );
+}
+
+function CommuteInput({ locId, value, onChange }) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) inputRef.current.focus();
+  }, [editing]);
+
+  const commit = () => {
+    const n = parseInt(editValue);
+    onChange(locId, isNaN(n) || n < 0 ? 0 : Math.min(n, 180));
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div style={styles.commuteInputRow} onClick={(e) => e.stopPropagation()}>
+        <CommuteIcon />
+        <input
+          ref={inputRef}
+          type="number"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
+          style={styles.commuteNumberInput}
+          min={0}
+          max={180}
+          step={5}
+        />
+        <span style={styles.commuteUnit}>min</span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{ ...styles.commuteInputRow, cursor: "pointer" }}
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditValue(value);
+        setEditing(true);
+      }}
+    >
+      <CommuteIcon />
+      <span style={styles.commuteValueText}>{value}</span>
+      <span style={styles.commuteUnit}>min</span>
+    </div>
+  );
+}
+
 // ── Main Component ──────────────────────────────────────────
 
 export default function SimpleHostForm({ onBack }) {
@@ -388,18 +635,17 @@ export default function SimpleHostForm({ onBack }) {
   const [showCapacity, setShowCapacity] = useState(false);
   const [capacity, setCapacity] = useState(20);
   const [published, setPublished] = useState(false);
+  const [selectedLocations, setSelectedLocations] = useState([]);
+  const [commuteTimes, setCommuteTimes] = useState({ ...COMMUTE_DEFAULTS });
+  const [startingLocation, setStartingLocation] = useState(USER_PROFILE.startingLocation);
 
   const toggleTimePref = (val) => {
     if (val === "flexible") {
       setTimePref(timePref.includes("flexible") ? [] : ["flexible"]);
       return;
     }
-    if (val === "custom") {
-      setTimePref(timePref.includes("custom") ? [] : ["custom"]);
-      return;
-    }
-    // Preset: deselect flexible and custom
-    let next = timePref.filter((v) => v !== "flexible" && v !== "custom");
+    // All non-flexible chips (morning, afternoon, evening, custom) are combinable
+    let next = timePref.filter((v) => v !== "flexible");
     next = next.includes(val) ? next.filter((v) => v !== val) : [...next, val];
     setTimePref(next);
   };
@@ -417,6 +663,29 @@ export default function SimpleHostForm({ onBack }) {
       prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]
     );
   };
+
+  const toggleLocation = (id) => {
+    setSelectedLocations((prev) =>
+      prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]
+    );
+  };
+
+  const updateCommuteTime = (locId, minutes) => {
+    setCommuteTimes((prev) => ({ ...prev, [locId]: minutes }));
+  };
+
+  const tw = getTimeWindow(timePref, timeOverrides);
+  const hasLocationData = selectedDates.length > 0 && tw !== null && duration;
+
+  const sortedLocations = [...LOCATIONS].map((loc) => {
+    const isPreferred = USER_PROFILE.preferredLocations.includes(loc.id);
+    const commute = commuteTimes[loc.id] || 0;
+    const avail = hasLocationData
+      ? getLocationOverallAvailability(loc.id, selectedDates, duration, tw.start, tw.end)
+      : { level: null, perDate: [] };
+    const score = scoreLocation(avail.level, isPreferred, commute);
+    return { ...loc, isPreferred, commute, avail, score };
+  }).sort((a, b) => b.score - a.score);
 
   const canPublish = title.trim() && duration && timePref.length > 0 && selectedDates.length > 0;
 
@@ -486,6 +755,17 @@ export default function SimpleHostForm({ onBack }) {
                     }).join(", ")}
               </span>
             </div>
+            {selectedLocations.length > 0 && (
+              <div style={styles.publishedDates}>
+                <span style={styles.publishedDatesLabel}>Locations:</span>
+                <span style={styles.publishedDatesText}>
+                  {selectedLocations
+                    .map((id) => LOCATIONS.find((l) => l.id === id)?.name)
+                    .filter(Boolean)
+                    .join(", ")}
+                </span>
+              </div>
+            )}
             <button
               style={styles.primaryBtn}
               onClick={() => {
@@ -499,6 +779,9 @@ export default function SimpleHostForm({ onBack }) {
                 setQuorum(5);
                 setShowCapacity(false);
                 setCapacity(20);
+                setSelectedLocations([]);
+                setCommuteTimes({ ...COMMUTE_DEFAULTS });
+                setStartingLocation(USER_PROFILE.startingLocation);
               }}
             >
               Start New Gathering
@@ -660,6 +943,131 @@ export default function SimpleHostForm({ onBack }) {
                     return formatDate(new Date(y, m - 1, day));
                   }).join(" \u00b7 ")}
                 </span>
+              </div>
+            )}
+          </div>
+
+          {/* ─ Suggested Locations ─ */}
+          <div style={styles.section}>
+            <label style={styles.label}>Suggested Locations</label>
+            <p style={styles.hint}>Select one or more venues for your gathering</p>
+
+            {/* Starting location */}
+            <div style={styles.startingLocationRow}>
+              <MapPinIcon />
+              <span style={styles.startingLocationLabel}>Starting from:</span>
+              <input
+                style={styles.startingLocationInput}
+                type="text"
+                value={startingLocation}
+                onChange={(e) => setStartingLocation(e.target.value.slice(0, 100))}
+                placeholder="Your starting location"
+              />
+            </div>
+            <p style={{ fontSize: 11, color: "#9aa5b4", margin: "-4px 0 12px 22px" }}>
+              Based on your profile. Change for this gathering.
+            </p>
+
+            {!hasLocationData && (
+              <div style={styles.locationEmptyHint}>
+                <span>Pick dates and a time preference above to see availability</span>
+              </div>
+            )}
+
+            {/* Location cards */}
+            <div style={styles.locationList}>
+              {sortedLocations.map((loc) => {
+                const selected = selectedLocations.includes(loc.id);
+                const availColor = loc.avail.level === "green" ? "#43a047"
+                  : loc.avail.level === "amber" ? "#f9a825"
+                  : loc.avail.level === "red" ? "#e53935"
+                  : null;
+                const availLabel = loc.avail.level === "green" ? "Available for all dates"
+                  : loc.avail.level === "amber" ? "Partially available"
+                  : loc.avail.level === "red" ? "Unavailable"
+                  : null;
+
+                return (
+                  <div
+                    key={loc.id}
+                    style={{
+                      ...styles.locationCard,
+                      ...(selected ? styles.locationCardSelected : {}),
+                    }}
+                    onClick={() => toggleLocation(loc.id)}
+                  >
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                      {/* Checkbox */}
+                      <div style={{ paddingTop: 2 }}>
+                        <div style={{
+                          ...styles.locCheckbox,
+                          ...(selected ? styles.locCheckboxChecked : {}),
+                        }}>
+                          {selected && (
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                              <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                          <span style={styles.locationName}>{loc.name}</span>
+                          {loc.isPreferred && (
+                            <span style={styles.preferredBadge}>
+                              <StarIcon /> Preferred
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                          <span style={styles.locationAddr}>{loc.address}</span>
+                          <DirectionsLink address={loc.address} />
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          <CommuteInput
+                            locId={loc.id}
+                            value={loc.commute}
+                            onChange={updateCommuteTime}
+                          />
+                          {availColor && (
+                            <div style={styles.locationAvail}>
+                              <span style={{ ...styles.availDot, background: availColor }} />
+                              {availLabel}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Per-date availability breakdown */}
+                    {loc.avail.perDate.length > 0 && (
+                      <div style={styles.locDateList}>
+                        {loc.avail.perDate.map((d) => {
+                          const [y, m, day] = d.dateKey.split("-").map(Number);
+                          const dt = new Date(y, m - 1, day);
+                          const label = dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+                          const c = d.level === "green" ? "#43a047" : d.level === "amber" ? "#f9a825" : "#e53935";
+                          return (
+                            <div key={d.dateKey} style={styles.locDateItem}>
+                              <div style={{ ...styles.locDateDot, background: c }} />
+                              <span style={styles.locDateLabel}>{label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {selectedLocations.length > 0 && (
+              <div style={styles.locationSelectedSummary}>
+                {selectedLocations.length} location{selectedLocations.length !== 1 ? "s" : ""} selected
               </div>
             )}
           </div>
@@ -1352,5 +1760,200 @@ const styles = {
     cursor: "pointer",
     fontFamily: "inherit",
     maxWidth: 240,
+  },
+
+  // Starting location
+  startingLocationRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "10px 14px",
+    background: "#f5f7fa",
+    borderRadius: 10,
+    border: "1px solid #eef1f4",
+    marginBottom: 8,
+    color: "#5a6a7a",
+  },
+  startingLocationLabel: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#4a5568",
+    whiteSpace: "nowrap",
+  },
+  startingLocationInput: {
+    flex: 1,
+    padding: "4px 8px",
+    borderRadius: 6,
+    border: "1.5px solid #e0e5eb",
+    fontSize: 13,
+    fontWeight: 500,
+    color: "#1a2332",
+    background: "#fff",
+    fontFamily: "inherit",
+    outline: "none",
+  },
+
+  // Location list & cards
+  locationList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  locationCard: {
+    display: "flex",
+    flexDirection: "column",
+    padding: "16px 18px",
+    borderRadius: 14,
+    border: "1.5px solid #e8ecf0",
+    background: "#fafbfc",
+    cursor: "pointer",
+    transition: "all 0.2s",
+    textAlign: "left",
+    fontFamily: "inherit",
+  },
+  locationCardSelected: {
+    borderColor: "#2e86c1",
+    background: "#eaf4fb",
+  },
+  locCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    border: "2px solid #ccd3dc",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "all 0.2s",
+  },
+  locCheckboxChecked: {
+    borderColor: "#2e86c1",
+    background: "#2e86c1",
+  },
+  locationName: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#1a2332",
+  },
+  locationAddr: {
+    fontSize: 13,
+    color: "#7a8a9a",
+  },
+  preferredBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    fontSize: 10,
+    fontWeight: 600,
+    color: "#d4880f",
+    background: "#fef9e7",
+    padding: "2px 8px",
+    borderRadius: 10,
+    border: "1px solid #f5e6b8",
+  },
+  locationAvail: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    color: "#5a6a7a",
+    fontWeight: 500,
+  },
+  availDot: {
+    width: 7,
+    height: 7,
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+  locDateList: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTop: "1px solid #eef1f5",
+  },
+  locDateItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "3px 10px 3px 7px",
+    borderRadius: 8,
+    background: "#f5f7fa",
+    fontSize: 11,
+    color: "#4a5568",
+  },
+  locDateDot: {
+    width: 7,
+    height: 7,
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+  locDateLabel: {
+    whiteSpace: "nowrap",
+  },
+  locationEmptyHint: {
+    padding: "20px 16px",
+    textAlign: "center",
+    fontSize: 13,
+    color: "#9aa5b4",
+    borderRadius: 10,
+    border: "1.5px dashed #e0e5eb",
+    marginBottom: 12,
+  },
+  locationSelectedSummary: {
+    marginTop: 8,
+    padding: "8px 14px",
+    background: "#f5f9ff",
+    borderRadius: 10,
+    border: "1px solid #d4e4f7",
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#1a5276",
+  },
+
+  // Directions & commute
+  directionsLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 12,
+    fontWeight: 600,
+    color: "#2e86c1",
+    textDecoration: "none",
+    padding: "2px 0",
+    borderBottom: "1px dashed #2e86c1",
+    transition: "opacity 0.15s",
+    lineHeight: 1,
+  },
+  commuteInputRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: 12,
+    color: "#5a6a7a",
+    padding: "2px 0",
+  },
+  commuteValueText: {
+    fontWeight: 600,
+    color: "#1a2332",
+    borderBottom: "1px dashed #b0bac5",
+    lineHeight: 1.2,
+  },
+  commuteNumberInput: {
+    width: 48,
+    padding: "3px 6px",
+    borderRadius: 6,
+    border: "1.5px solid #2e86c1",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#1a2332",
+    outline: "none",
+    fontFamily: "inherit",
+    background: "#fff",
+    textAlign: "center",
+  },
+  commuteUnit: {
+    fontSize: 12,
+    color: "#7a8a9a",
   },
 };
