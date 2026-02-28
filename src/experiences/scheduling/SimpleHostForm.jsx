@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -18,6 +18,165 @@ const TIME_OF_DAY = [
   { label: "Flexible", value: "flexible", hint: "Any time" },
 ];
 
+// ── Mock Google Calendar data ───────────────────────────────
+
+const MOCK_EVENTS_WEEKDAY = [
+  { start: 9, end: 9.5, title: "Team standup", color: "#4285f4" },
+  { start: 10, end: 11, title: "Project sync", color: "#4285f4" },
+  { start: 12, end: 13, title: "Lunch", color: "#7986cb" },
+  { start: 14, end: 15, title: "Design review", color: "#e67c73" },
+  { start: 16, end: 16.5, title: "1:1 with manager", color: "#f4511e" },
+];
+
+const MOCK_EVENTS_VARIANTS = [
+  [
+    { start: 8.5, end: 9.5, title: "Leadership sync", color: "#4285f4" },
+    { start: 10, end: 11.5, title: "Sprint planning", color: "#e67c73" },
+    { start: 12, end: 13, title: "Lunch", color: "#7986cb" },
+    { start: 15, end: 16, title: "Customer call", color: "#f4511e" },
+  ],
+  [
+    { start: 9, end: 9.5, title: "Team standup", color: "#4285f4" },
+    { start: 12, end: 13, title: "Lunch", color: "#7986cb" },
+    { start: 13.5, end: 14.5, title: "Roadmap review", color: "#e67c73" },
+    { start: 15, end: 16.5, title: "Workshop", color: "#0b8043" },
+    { start: 17, end: 17.5, title: "Wrap-up", color: "#4285f4" },
+  ],
+  [
+    { start: 10, end: 10.5, title: "Check-in", color: "#4285f4" },
+    { start: 12, end: 13, title: "Lunch", color: "#7986cb" },
+  ],
+  [
+    { start: 8, end: 9, title: "Early sync", color: "#f4511e" },
+    { start: 9.5, end: 10.5, title: "Product review", color: "#e67c73" },
+    { start: 11, end: 12, title: "Interviews", color: "#0b8043" },
+    { start: 12, end: 13, title: "Lunch", color: "#7986cb" },
+    { start: 13.5, end: 15, title: "Strategy session", color: "#4285f4" },
+    { start: 15.5, end: 16.5, title: "Stakeholder update", color: "#e67c73" },
+    { start: 17, end: 18, title: "Retro", color: "#f4511e" },
+  ],
+];
+
+const MOCK_EVENTS_WEEKEND = [
+  { start: 10, end: 11, title: "Farmers market", color: "#0b8043" },
+];
+
+// ── Helpers ─────────────────────────────────────────────────
+
+function seededRandom(dateKey) {
+  let h = 0;
+  for (let i = 0; i < dateKey.length; i++) {
+    h = ((h << 5) - h + dateKey.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+function getMockEventsForDate(dateKey) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dow = dt.getDay();
+  if (dow === 0 || dow === 6) {
+    return seededRandom(dateKey) % 3 === 0 ? MOCK_EVENTS_WEEKEND : [];
+  }
+  const seed = seededRandom(dateKey);
+  if (seed % 5 === 0) return MOCK_EVENTS_WEEKDAY;
+  return MOCK_EVENTS_VARIANTS[seed % MOCK_EVENTS_VARIANTS.length];
+}
+
+function formatHour(h) {
+  const hr = Math.floor(h);
+  const min = h % 1 === 0.5 ? "30" : "00";
+  const ampm = hr >= 12 ? "PM" : "AM";
+  const display = hr > 12 ? hr - 12 : hr === 0 ? 12 : hr;
+  return `${display}:${min} ${ampm}`;
+}
+
+function getFreeGaps(events, windowStart, windowEnd) {
+  const sorted = [...events]
+    .filter((e) => e.end > windowStart && e.start < windowEnd)
+    .sort((a, b) => a.start - b.start);
+  const gaps = [];
+  let cursor = windowStart;
+  for (const ev of sorted) {
+    if (ev.start > cursor) gaps.push({ start: cursor, end: ev.start });
+    cursor = Math.max(cursor, ev.end);
+  }
+  if (cursor < windowEnd) gaps.push({ start: cursor, end: windowEnd });
+  return gaps;
+}
+
+function getTimeWindow(timePref) {
+  if (timePref.length === 0) return null;
+  if (timePref.includes("flexible")) return { start: 8, end: 21, label: "8:00 AM \u2014 9:00 PM" };
+
+  const windows = {
+    morning: { start: 8, end: 12 },
+    afternoon: { start: 12, end: 17 },
+    evening: { start: 17, end: 21 },
+  };
+
+  let minStart = 24, maxEnd = 0;
+  for (const pref of timePref) {
+    const w = windows[pref];
+    if (w) {
+      minStart = Math.min(minStart, w.start);
+      maxEnd = Math.max(maxEnd, w.end);
+    }
+  }
+  return {
+    start: minStart,
+    end: maxEnd,
+    label: `${formatHour(minStart)} \u2014 ${formatHour(maxEnd)}`,
+  };
+}
+
+function getDayAvailabilityInfo(dateKey, durationMinutes, startHr, endHr) {
+  const events = getMockEventsForDate(dateKey);
+  const windowEvents = events.filter((e) => e.end > startHr && e.start < endHr);
+  const gaps = getFreeGaps(events, startHr, endHr);
+  const durationHours = durationMinutes / 60;
+  const totalFreeHours = gaps.reduce((sum, g) => sum + (g.end - g.start), 0);
+  const windowHours = endHr - startHr;
+  const fullyFree = totalFreeHours >= windowHours - 0.01;
+  const fitsOnce = gaps.some((g) => g.end - g.start >= durationHours);
+
+  let level;
+  if (fullyFree) level = "green";
+  else if (fitsOnce) level = "amber";
+  else level = "red";
+
+  const items = [];
+  let cursor = startHr;
+  const sorted = [...windowEvents].sort((a, b) => a.start - b.start);
+  for (const ev of sorted) {
+    const evStart = Math.max(ev.start, startHr);
+    const evEnd = Math.min(ev.end, endHr);
+    if (evStart > cursor) {
+      const gapDur = evStart - cursor;
+      const fits = gapDur >= durationHours;
+      items.push({
+        type: fits ? "green" : "amber",
+        label: `${formatHour(cursor)}\u2013${formatHour(evStart)} \u2014 Free (${Math.round(gapDur * 60)} min)`,
+      });
+    }
+    items.push({
+      type: "red",
+      label: `${formatHour(evStart)}\u2013${formatHour(evEnd)} \u2014 ${ev.title}`,
+    });
+    cursor = Math.max(cursor, evEnd);
+  }
+  if (cursor < endHr) {
+    const gapDur = endHr - cursor;
+    const fits = gapDur >= durationHours;
+    items.push({
+      type: fits ? "green" : "amber",
+      label: `${formatHour(cursor)}\u2013${formatHour(endHr)} \u2014 Free (${Math.round(gapDur * 60)} min)`,
+    });
+  }
+
+  return { level, items };
+}
+
 function formatDate(d) {
   return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
 }
@@ -27,12 +186,67 @@ function durationLabel(mins) {
   return d ? d.label : `${mins} min`;
 }
 
+// ── DayPopover ──────────────────────────────────────────────
+
+function DayPopover({ dateKey, duration, window: tw, style }) {
+  const info = getDayAvailabilityInfo(dateKey, duration, tw.start, tw.end);
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const dayLabel = dt.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  const bulletColors = { green: "#43a047", amber: "#f9a825", red: "#e53935" };
+
+  return (
+    <div style={{ ...styles.popover, ...style }} onClick={(e) => e.stopPropagation()}>
+      <div style={styles.popoverHeader}>
+        <span style={styles.popoverTitle}>{dayLabel}</span>
+        <span style={styles.popoverBadge}>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginRight: 4 }}>
+            <circle cx="5" cy="5" r="4" stroke="#4285f4" strokeWidth="1.2" />
+            <path d="M5 3V5.5L6.5 6.5" stroke="#4285f4" strokeWidth="1" strokeLinecap="round" />
+          </svg>
+          Google Calendar
+        </span>
+      </div>
+      <div style={styles.popoverWindow}>
+        <span style={styles.popoverWindowLabel}>{tw.label}</span>
+      </div>
+      <ul style={styles.popoverList}>
+        {info.items.map((item, i) => (
+          <li key={i} style={styles.popoverListItem}>
+            <div style={{ ...styles.popoverBullet, background: bulletColors[item.type] }} />
+            <span style={styles.popoverItemText}>{item.label}</span>
+          </li>
+        ))}
+        {info.items.length === 0 && (
+          <li style={styles.popoverListItem}>
+            <div style={{ ...styles.popoverBullet, background: "#43a047" }} />
+            <span style={styles.popoverItemText}>Fully available</span>
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
 // ── Calendar ────────────────────────────────────────────────
 
-function MiniCalendar({ selectedDates, onToggleDate }) {
+function MiniCalendar({ selectedDates, onToggleDate, duration, timePref }) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [hoveredDate, setHoveredDate] = useState(null);
+  const hoverTimeout = useRef(null);
+
+  useEffect(() => () => clearTimeout(hoverTimeout.current), []);
+
+  const handleMouseEnter = (key) => {
+    clearTimeout(hoverTimeout.current);
+    hoverTimeout.current = setTimeout(() => setHoveredDate(key), 300);
+  };
+  const handleMouseLeave = () => {
+    clearTimeout(hoverTimeout.current);
+    hoverTimeout.current = setTimeout(() => setHoveredDate(null), 200);
+  };
 
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -56,6 +270,9 @@ function MiniCalendar({ selectedDates, onToggleDate }) {
 
   const canGoPrev = viewYear > today.getFullYear() || (viewYear === today.getFullYear() && viewMonth > today.getMonth());
 
+  const tw = getTimeWindow(timePref);
+  const showAvailability = duration && tw;
+
   const cells = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
@@ -75,28 +292,73 @@ function MiniCalendar({ selectedDates, onToggleDate }) {
         </span>
         <button onClick={nextMonth} style={styles.calNav}>&rsaquo;</button>
       </div>
+      {showAvailability && (
+        <div style={styles.calAvailHint}>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginRight: 5, flexShrink: 0, marginTop: 1 }}>
+            <circle cx="5" cy="5" r="4" stroke="#4285f4" strokeWidth="1.2" />
+            <path d="M5 3V5.5L6.5 6.5" stroke="#4285f4" strokeWidth="1" strokeLinecap="round" />
+          </svg>
+          Hover dates to see your calendar availability
+        </div>
+      )}
       <div style={styles.calGrid}>
         {DAYS_OF_WEEK.map((d) => (
           <div key={d} style={styles.calDayLabel}>{d}</div>
         ))}
-        {cells.map((day, i) =>
-          day === null ? (
-            <div key={`e${i}`} />
-          ) : (
-            <button
-              key={day}
-              disabled={isPast(day)}
-              onClick={() => !isPast(day) && onToggleDate(dateKey(viewYear, viewMonth, day))}
-              style={{
-                ...styles.calDay,
-                ...(isPast(day) ? styles.calDayPast : {}),
-                ...(isSelected(day) ? styles.calDaySelected : {}),
-              }}
+        {cells.map((day, i) => {
+          if (day === null) return <div key={`e${i}`} />;
+
+          const key = dateKey(viewYear, viewMonth, day);
+          const past = isPast(day);
+          const selected = isSelected(day);
+          const info = showAvailability && !past
+            ? getDayAvailabilityInfo(key, duration, tw.start, tw.end)
+            : null;
+          const barColor = info
+            ? info.level === "green" ? "#43a047"
+            : info.level === "amber" ? "#f9a825"
+            : "#e53935"
+            : null;
+
+          return (
+            <div
+              key={key}
+              style={{ position: "relative" }}
+              onMouseEnter={() => showAvailability && !past && handleMouseEnter(key)}
+              onMouseLeave={handleMouseLeave}
             >
-              {day}
-            </button>
-          )
-        )}
+              <button
+                disabled={past}
+                onClick={() => !past && onToggleDate(key)}
+                style={{
+                  ...styles.calDay,
+                  ...(past ? styles.calDayPast : {}),
+                  ...(selected ? styles.calDaySelected : {}),
+                  ...(barColor ? { paddingBottom: 12 } : {}),
+                }}
+              >
+                {day}
+              </button>
+              {barColor && (
+                <div style={{ ...styles.calBar, background: barColor }} />
+              )}
+              {hoveredDate === key && !past && showAvailability && (
+                <DayPopover
+                  dateKey={key}
+                  duration={duration}
+                  window={tw}
+                  style={{
+                    position: "absolute",
+                    zIndex: 100,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    bottom: "calc(100% + 8px)",
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -307,7 +569,12 @@ export default function SimpleHostForm({ onBack }) {
           <div style={styles.section}>
             <label style={styles.label}>Pick some dates</label>
             <p style={styles.hint}>Tap dates to add or remove them</p>
-            <MiniCalendar selectedDates={selectedDates} onToggleDate={toggleDate} />
+            <MiniCalendar
+              selectedDates={selectedDates}
+              onToggleDate={toggleDate}
+              duration={duration}
+              timePref={timePref}
+            />
             {selectedDates.length > 0 && (
               <div style={styles.selectedSummary}>
                 <span style={styles.selectedCount}>{selectedDates.length} date{selectedDates.length !== 1 ? "s" : ""} selected</span>
@@ -577,6 +844,16 @@ const styles = {
     padding: "12px 16px",
     borderBottom: "1px solid #eef1f4",
   },
+  calAvailHint: {
+    display: "flex",
+    alignItems: "flex-start",
+    padding: "6px 14px",
+    fontSize: 11,
+    color: "#4285f4",
+    fontWeight: 500,
+    background: "#e8f0fe",
+    borderBottom: "1px solid #eef1f4",
+  },
   calMonth: {
     fontSize: 15,
     fontWeight: 700,
@@ -626,6 +903,7 @@ const styles = {
     cursor: "pointer",
     fontFamily: "inherit",
     transition: "all 0.15s",
+    width: "100%",
   },
   calDayPast: {
     color: "#d0d5dc",
@@ -636,6 +914,83 @@ const styles = {
     borderColor: "#2e86c1",
     color: "#1a5276",
     fontWeight: 700,
+  },
+  calBar: {
+    position: "absolute",
+    bottom: 2,
+    left: 3,
+    right: 3,
+    height: 3,
+    borderRadius: 2,
+  },
+
+  // Popover
+  popover: {
+    width: 260,
+    background: "#fff",
+    borderRadius: 12,
+    boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06)",
+    padding: 0,
+    overflow: "hidden",
+    cursor: "default",
+  },
+  popoverHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "10px 14px",
+    borderBottom: "1px solid #f0f0f0",
+    background: "#fafbfc",
+  },
+  popoverTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#1a2332",
+  },
+  popoverBadge: {
+    display: "flex",
+    alignItems: "center",
+    fontSize: 10,
+    color: "#4285f4",
+    fontWeight: 600,
+    background: "#e8f0fe",
+    padding: "2px 8px",
+    borderRadius: 10,
+  },
+  popoverWindow: {
+    padding: "6px 14px",
+    background: "#f5f7fa",
+    fontSize: 11,
+    color: "#6a7585",
+    fontWeight: 600,
+    borderBottom: "1px solid #f0f0f0",
+  },
+  popoverWindowLabel: {},
+  popoverList: {
+    listStyle: "none",
+    padding: "8px 14px 10px",
+    margin: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
+  },
+  popoverListItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 12,
+    color: "#1a2332",
+    lineHeight: 1.3,
+  },
+  popoverBullet: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    flexShrink: 0,
+  },
+  popoverItemText: {
+    fontSize: 11,
+    color: "#4a5568",
   },
 
   // Selected dates summary
