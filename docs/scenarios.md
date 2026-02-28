@@ -35,9 +35,10 @@ This document catalogs the scheduling scenarios Quorum is designed to handle, or
 - **Tie-breaking:** how the winning slot is chosen when multiple hit quorum
 
 ### Resolution
-- **Trigger:** what causes the gathering to confirm
-- **Notifications:** who is told what, when
-- **Follow-up:** waitlist handling, overflow session creation, calendar invites
+- **Trigger:** what causes the host to be notified (quorum reached)
+- **Host lock-in:** host reviews results and confirms (or overrides)
+- **Notifications:** who is told what, when (after host confirms)
+- **Follow-up:** invitee acceptance, waitlist handling, overflow session creation, calendar invites
 
 ### Edge Cases & Open Questions
 - Bullet list of anything unresolved or worth calling out
@@ -73,15 +74,16 @@ This document catalogs the scheduling scenarios Quorum is designed to handle, or
 - **Tie-breaking:** If multiple slots reach quorum simultaneously, the slot with the most first-preference votes wins. If still tied, the host's own preference ranking (from Step 2: Rank) is the tiebreaker
 
 ### Resolution
-- **Trigger:** The first date/time/location combination to reach the quorum threshold is locked in
+- **Trigger:** When the first date/time/location combination reaches the quorum threshold, the **host is notified** and presented with the results for review
+- **Host lock-in:** The host reviews the winning slot (and runner-up data) and **confirms** the gathering. The host can also override and select a different slot if they have reason to
 - **Notifications:**
-  - All invitees who ranked the winning slot are confirmed immediately
-  - Remaining invitees are notified of the confirmed date/time/location and can still join up to capacity
-  - If overflow is enabled and a second slot also reaches quorum, a second confirmation round begins
+  - After host confirmation, invitees who ranked the winning slot are **formally invited** and must accept within a defined timeframe to secure their spot
+  - Invitees who did not rank the confirmed slot are notified of the result and can still join up to capacity
+  - If overflow is enabled and a second slot also reaches quorum, the host is notified again to confirm an additional gathering
 - **Follow-up:**
   - Calendar invites sent to confirmed attendees (with location details)
-  - Waitlisted invitees (if at capacity) are notified of their position
-  - If overflow is enabled, waitlisted invitees are automatically moved into the overflow session once it confirms
+  - Registration remains open until capacity is reached; once full, a waitlist is established
+  - If overflow is enabled, waitlisted invitees are offered the next-best slot and a new quorum cycle begins
 
 ### Edge Cases & Open Questions
 - **No slot reaches quorum:** What happens? Notify the host to extend the deadline, add more options, or lower the quorum?
