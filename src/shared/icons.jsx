@@ -43,6 +43,16 @@ export const ClassicScheduleIcon = () => (
   </svg>
 );
 
+export const SimulationIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+    <rect x="4" y="6" width="24" height="22" rx="4" stroke={COLORS.blueLight} strokeWidth="2.5" fill="none"/>
+    <path d="M4 14H28" stroke={COLORS.blueLight} strokeWidth="2"/>
+    <path d="M10 4V8" stroke={COLORS.blueLight} strokeWidth="2.5" strokeLinecap="round"/>
+    <path d="M22 4V8" stroke={COLORS.blueLight} strokeWidth="2.5" strokeLinecap="round"/>
+    <path d="M13 18V26L21 22L13 18Z" fill={COLORS.blueLight} opacity="0.8"/>
+  </svg>
+);
+
 export const CombinedFormIcon = () => (
   <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
     <rect x="4" y="6" width="24" height="22" rx="4" stroke={COLORS.blueLight} strokeWidth="2.5" fill="none"/>

@@ -4,6 +4,7 @@ import {
   CalendarClockIcon,
   CombinedFormIcon,
   ClassicScheduleIcon,
+  SimulationIcon,
 } from "../shared/icons";
 
 const EXPERIENCES = [
@@ -51,6 +52,15 @@ const EXPERIENCES = [
     icon: ClassicScheduleIcon,
     status: "active",
     load: () => import("./scheduling/HostClassicScheduling.jsx"),
+  },
+  {
+    id: "s01-simulation",
+    title: "S-01: Scenario Simulation",
+    description: "End-to-end simulation of a single host, single gathering with 12 invitees — watch quorum reached in real time.",
+    app: "quorum",
+    icon: SimulationIcon,
+    status: "active",
+    load: () => import("./scheduling/S01Simulation.jsx"),
   },
 ];
 
